@@ -24,6 +24,8 @@ sitetwo-oh/
 ├── packages/
 │   └── design-system/       tokens, themes, components — see packages/design-system/README.md
 ├── docker-compose.yml       API container + PostgreSQL database
+├── terraform/               AWS environment (CloudFront+S3, API Gateway,
+│                            ECS Fargate, RDS) — see terraform/README.md
 ├── package.json             npm workspaces root + orchestration scripts
 └── tsconfig.base.json       strict TS settings shared by all workspaces
 ```

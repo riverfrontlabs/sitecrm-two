@@ -1,0 +1,14 @@
+# Copy to terraform.tfvars and adjust. Every value is optional — the
+# defaults in variables.tf stand up a working dev environment as-is.
+
+# aws_region    = "us-east-1"
+# environment   = "dev"
+# project_name  = "sitetwo-oh"
+
+# API image tag to deploy from ECR (see README.md for the push workflow).
+# api_image_tag     = "latest"
+# api_desired_count = 1
+
+# Database sizing.
+# db_instance_class    = "db.t4g.micro"
+# db_allocated_storage = 20

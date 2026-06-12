@@ -13,6 +13,16 @@ coverage/
 .env.*
 !.env.example
 
+# Terraform: state (contains secrets!), caches, and local variable values
+**/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+!*.tfvars.example
+tfplan
+*.tfplan
+# (note: .terraform.lock.hcl is intentionally committed — do not ignore it)
+
 # Local AI-tooling state
 .claude/settings.local.json
 .qodo/

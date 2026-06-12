@@ -1,0 +1,71 @@
+# PostgreSQL on RDS.
+#
+# The server's PostgresProjectStore applies its own schema on startup, so the
+# database needs no provisioning beyond existing. The full connection URL is
+# stored in Secrets Manager and injected into the ECS task as DATABASE_URL —
+# the same variable the server uses locally and under docker compose.
+#
+# Dev-grade settings flagged inline; revisit each before calling this "prod".
+
+resource "random_password" "db" {
+  length = 32
+  # Alphanumeric only: the password is embedded in a postgres:// URL, and
+  # URL-significant characters (@ : / #) would need escaping everywhere.
+  special = false
+}
+
+resource "aws_db_subnet_group" "main" {
+  name       = local.name
+  subnet_ids = aws_subnet.private[*].id
+
+  tags = { Name = "${local.name}-db-subnets" }
+}
+
+resource "aws_db_instance" "main" {
+  identifier = "${local.name}-db"
+
+  engine         = "postgres"
+  engine_version = "17"
+  instance_class = var.db_instance_class
+
+  allocated_storage = var.db_allocated_storage
+  storage_type      = "gp3"
+  storage_encrypted = true
+
+  db_name  = var.db_name
+  username = var.db_username
+  password = random_password.db.result
+
+  db_subnet_group_name   = aws_db_subnet_group.main.name
+  vpc_security_group_ids = [aws_security_group.db.id]
+  publicly_accessible    = false
+
+  # --- dev-grade lifecycle settings; tighten for production: ---
+  multi_az                = false # prod: true for failover
+  backup_retention_period = 1     # prod: 7+
+  skip_final_snapshot     = true  # prod: false (snapshot on destroy)
+  deletion_protection     = false # prod: true
+
+  apply_immediately = true
+
+  tags = { Name = "${local.name}-db" }
+}
+
+# The complete connection URL, consumed by the ECS task definition.
+resource "aws_secretsmanager_secret" "database_url" {
+  name = "${local.name}/database-url"
+  # Allow re-creating the environment without waiting out the default
+  # 7-to-30-day recovery window. Dev convenience; remove for production.
+  recovery_window_in_days = 0
+}
+
+resource "aws_secretsmanager_secret_version" "database_url" {
+  secret_id = aws_secretsmanager_secret.database_url.id
+  secret_string = format(
+    "postgres://%s:%s@%s/%s",
+    aws_db_instance.main.username,
+    random_password.db.result,
+    aws_db_instance.main.endpoint, # host:port
+    var.db_name,
+  )
+}
