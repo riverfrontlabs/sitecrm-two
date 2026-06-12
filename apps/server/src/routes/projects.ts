@@ -86,7 +86,7 @@ export const projectRoutes: FastifyPluginAsync<ProjectRoutesOptions> = async (ap
       },
     },
     async (request, reply) => {
-      const project = store.get(request.params.projectId);
+      const project = await store.get(request.params.projectId);
       if (!project) {
         return reply
           .status(404)
@@ -106,7 +106,7 @@ export const projectRoutes: FastifyPluginAsync<ProjectRoutesOptions> = async (ap
       },
     },
     async (request, reply) => {
-      const project = store.create(request.body);
+      const project = await store.create(request.body);
       return reply.status(201).send(project);
     },
   );
@@ -125,7 +125,7 @@ export const projectRoutes: FastifyPluginAsync<ProjectRoutesOptions> = async (ap
       },
     },
     async (request, reply) => {
-      const deleted = store.remove(request.params.projectId);
+      const deleted = await store.remove(request.params.projectId);
       if (!deleted) {
         return reply
           .status(404)

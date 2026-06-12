@@ -29,10 +29,47 @@ update all three in the same commit.**
 | `GET /api/projects/:projectId`    | Fetch one project.                             |
 | `DELETE /api/projects/:projectId` | Delete a project.                              |
 
-Storage is **in-memory** (`src/store/project-store.ts`) and reseeded on every
-restart — persistence is intentionally out of scope for now. The store sits
-behind a four-method class, so a database can replace it without touching
-routes.
+## Storage
+
+Routes talk to the `ProjectStore` interface (`src/store/project-store.ts`);
+the backend is chosen at startup by `server.ts`:
+
+| `DATABASE_URL` | Backend                                      | Used by                                                    |
+| -------------- | -------------------------------------------- | ---------------------------------------------------------- |
+| set            | **PostgreSQL** (`postgres-project-store.ts`) | `docker compose up`, or local dev pointed at the container |
+| unset          | **In-memory** (`memory-project-store.ts`)    | Tests, and zero-setup local dev (reseeds each restart)     |
+
+The Postgres store applies its schema idempotently on startup
+(`CREATE TABLE IF NOT EXISTS`) and seeds example data into an empty
+database — there is no separate migration step to run. When the schema
+outgrows this, swap in a real migration tool; the SQL lives in one constant
+in `postgres-project-store.ts`.
+
+### Running against Postgres locally
+
+```bash
+docker compose up -d db                      # start only the database
+cp apps/server/.env.example apps/server/.env # enables DATABASE_URL
+npm run dev:api                              # auto-loads the .env file
+```
+
+Postgres-backed integration tests are opt-in (they need a real database):
+
+```bash
+TEST_DATABASE_URL=postgres://sitetwo:sitetwo@localhost:5432/sitetwo npm test -w @sitetwo/server
+```
+
+## Docker
+
+`apps/server/Dockerfile` builds a production image (multi-stage: compile
+with dev deps, ship only production deps + `dist/` + the OpenAPI spec). It
+must be built **from the repo root** because dependency install is driven by
+the monorepo's root lockfile — the compose file already does this:
+
+```bash
+docker compose up --build    # API on :3001 + Postgres on :5432
+docker compose down          # stop; add -v to also wipe the database volume
+```
 
 ## Architecture
 
@@ -46,7 +83,9 @@ src/
 ├── plugins/
 │   └── openapi.ts       serves openapi.yaml at /docs (static mode)
 ├── store/
-│   └── project-store.ts in-memory storage
+│   ├── project-store.ts           ProjectStore interface + seed data
+│   ├── memory-project-store.ts    zero-setup backend (tests, default dev)
+│   └── postgres-project-store.ts  persistent backend (DATABASE_URL)
 └── types.ts             domain types mirroring the OpenAPI schemas
 ```
 
@@ -71,10 +110,14 @@ schemas strip any property not declared in the spec.
 
 ## Configuration
 
-| Variable | Default     | Purpose                                  |
-| -------- | ----------- | ---------------------------------------- |
-| `PORT`   | `3001`      | Listen port.                             |
-| `HOST`   | `127.0.0.1` | Bind address (`0.0.0.0` for containers). |
+A `.env` file in this package is loaded automatically when present — copy
+[`.env.example`](.env.example) to get started.
+
+| Variable       | Default     | Purpose                                                |
+| -------------- | ----------- | ------------------------------------------------------ |
+| `DATABASE_URL` | _(unset)_   | Postgres connection string; unset = in-memory storage. |
+| `PORT`         | `3001`      | Listen port.                                           |
+| `HOST`         | `127.0.0.1` | Bind address (the Docker image sets `0.0.0.0`).        |
 
 ## Conventions
 

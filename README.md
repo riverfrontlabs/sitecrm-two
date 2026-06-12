@@ -23,6 +23,7 @@ sitetwo-oh/
 │       └── openapi/openapi.yaml             ← API source of truth, served at /docs
 ├── packages/
 │   └── design-system/       tokens, themes, components — see packages/design-system/README.md
+├── docker-compose.yml       API container + PostgreSQL database
 ├── package.json             npm workspaces root + orchestration scripts
 └── tsconfig.base.json       strict TS settings shared by all workspaces
 ```
@@ -35,6 +36,20 @@ Requires Node.js ≥ 20.
 npm install        # installs all workspaces
 npm run dev        # starts web (5173) + api (3001) together
 ```
+
+Without further configuration the API stores data **in memory** (reseeded
+on every restart). For persistence, run the PostgreSQL container and point
+the API at it:
+
+```bash
+docker compose up -d db                       # PostgreSQL on :5432 (data survives restarts)
+cp apps/server/.env.example apps/server/.env  # sets DATABASE_URL for the API
+npm run dev                                   # as before — now backed by Postgres
+```
+
+Or run the API itself in Docker too (`docker compose up --build`) and just
+`npm run dev:web` for the frontend — the Vite proxy reaches the container
+the same way.
 
 Then open:
 
@@ -91,9 +106,11 @@ Three contracts hold the system together:
 
 ## Current scope & deliberate simplifications
 
-- Project storage is **in-memory** and reseeds on restart; the store class
-  (`apps/server/src/store/project-store.ts`) is the single seam where a real
-  database would slot in.
-- No authentication; CORS is open for development.
+- Storage is selected at startup: **PostgreSQL** when `DATABASE_URL` is set
+  (the docker-compose default), otherwise **in-memory**. The schema is
+  applied idempotently on startup; a real migration tool becomes worthwhile
+  once the schema grows.
+- No authentication; CORS is open and the compose credentials are
+  development defaults.
 - No CI pipeline yet; `npm run lint && npm run typecheck && npm test` is the
   full local quality gate.

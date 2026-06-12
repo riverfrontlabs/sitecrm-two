@@ -60,13 +60,11 @@ describe('api client', () => {
   it('resolves to undefined for 204 No Content', async () => {
     vi.stubGlobal(
       'fetch',
-      vi
-        .fn()
-        .mockResolvedValue({
-          ok: true,
-          status: 204,
-          json: () => Promise.reject(new Error('no body')),
-        } as unknown as Response),
+      vi.fn().mockResolvedValue({
+        ok: true,
+        status: 204,
+        json: () => Promise.reject(new Error('no body')),
+      } as unknown as Response),
     );
 
     await expect(api.deleteProject('some-id')).resolves.toBeUndefined();

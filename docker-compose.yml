@@ -1,0 +1,53 @@
+# Local container stack: the REST API + its PostgreSQL database.
+#
+#   docker compose up --build      # API on :3001, Postgres on :5432
+#   docker compose up -d db        # database only — pair with `npm run dev`
+#                                  # and a DATABASE_URL in apps/server/.env
+#   docker compose down            # stop (add -v to also wipe the data volume)
+#
+# The web app is not containerized: in development it runs under Vite
+# (`npm run dev:web`) and proxies /api/* to the API on port 3001 — which can
+# be either the container below or a locally running `npm run dev:api`.
+#
+# Credentials below are intentionally simple defaults for LOCAL DEVELOPMENT
+# ONLY; override them with environment variables for anything shared.
+
+name: sitetwo-oh
+
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-sitetwo}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-sitetwo}
+      POSTGRES_DB: ${POSTGRES_DB:-sitetwo}
+    ports:
+      - '5432:5432'
+    volumes:
+      # Named volume so data survives `docker compose down` (without -v).
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      # Gate the API's startup on Postgres actually accepting connections,
+      # not just the container existing.
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-sitetwo} -d ${POSTGRES_DB:-sitetwo}']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    build:
+      # Repo root as context: the monorepo's root lockfile drives the install.
+      context: .
+      dockerfile: apps/server/Dockerfile
+    environment:
+      # "db" resolves via the compose network; the API applies its schema and
+      # seeds an empty database on startup (see postgres-project-store.ts).
+      DATABASE_URL: postgres://${POSTGRES_USER:-sitetwo}:${POSTGRES_PASSWORD:-sitetwo}@db:5432/${POSTGRES_DB:-sitetwo}
+    ports:
+      - '3001:3001'
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  pgdata:

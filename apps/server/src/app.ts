@@ -3,15 +3,17 @@ import Fastify, { type FastifyInstance } from 'fastify';
 import { openapiPlugin } from './plugins/openapi.js';
 import { healthRoutes } from './routes/health.js';
 import { projectRoutes } from './routes/projects.js';
-import { ProjectStore } from './store/project-store.js';
+import { MemoryProjectStore } from './store/memory-project-store.js';
+import type { ProjectStore } from './store/project-store.js';
 
 /** Options for {@link buildApp}. */
 export interface BuildAppOptions {
   /** Enable request logging. Off by default so tests stay quiet. */
   logger?: boolean;
   /**
-   * Pre-populated store to use instead of the default seeded one.
-   * Tests inject empty or purpose-built stores here.
+   * Storage backend. Defaults to a seeded in-memory store; `server.ts`
+   * passes a {@link PostgresProjectStore} when `DATABASE_URL` is set, and
+   * tests inject empty or purpose-built stores.
    */
   store?: ProjectStore;
 }
@@ -36,7 +38,7 @@ export interface BuildAppOptions {
  * const res = await app.inject({ method: 'GET', url: '/api/health' });
  */
 export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyInstance> {
-  const { logger = false, store = new ProjectStore() } = options;
+  const { logger = false, store = new MemoryProjectStore() } = options;
 
   const app = Fastify({
     logger,

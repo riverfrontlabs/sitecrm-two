@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { afterEach, describe, expect, it } from 'vitest';
 import { buildApp } from './app.js';
-import { ProjectStore } from './store/project-store.js';
+import { MemoryProjectStore } from './store/memory-project-store.js';
 import type { Project } from './types.js';
 
 /**
@@ -13,7 +13,7 @@ let app: FastifyInstance;
 
 /** Builds an app over an empty store (no seed data) for deterministic tests. */
 async function buildTestApp(): Promise<FastifyInstance> {
-  app = await buildApp({ store: new ProjectStore([]) });
+  app = await buildApp({ store: new MemoryProjectStore([]) });
   return app;
 }
 
