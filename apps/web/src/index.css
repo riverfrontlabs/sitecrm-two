@@ -1,0 +1,54 @@
+/**
+ * App-level stylesheet: Tailwind v4 + the design system's tokens.
+ *
+ * Layering:
+ * 1. Tailwind core.
+ * 2. The design system's token contract (CSS variables, one block per theme).
+ * 3. `@source` — tell Tailwind to also scan the design-system source for
+ *    class names, since it ships as uncompiled TypeScript.
+ * 4. `@theme inline` — map the semantic `--ds-*` tokens onto Tailwind's
+ *    theme namespaces so utilities like `bg-surface`, `text-ink`,
+ *    `border-border` and `ring-ring` exist. `inline` keeps the var()
+ *    reference live, so utilities follow the active theme at runtime.
+ */
+@import 'tailwindcss';
+@import '@sitetwo/design-system/tokens.css';
+@source '../../../packages/design-system/src';
+
+@theme inline {
+  /* Colors — each name becomes a bg-, text-, and border- utility suffix. */
+  --color-canvas: var(--ds-color-canvas);
+  --color-surface: var(--ds-color-surface);
+  --color-overlay: var(--ds-color-overlay);
+  --color-ink: var(--ds-color-ink);
+  --color-ink-muted: var(--ds-color-ink-muted);
+  --color-border: var(--ds-color-border);
+  --color-primary: var(--ds-color-primary);
+  --color-primary-strong: var(--ds-color-primary-strong);
+  --color-on-primary: var(--ds-color-on-primary);
+  --color-ring: var(--ds-color-ring);
+  --color-success: var(--ds-color-success);
+  --color-warning: var(--ds-color-warning);
+  --color-danger: var(--ds-color-danger);
+  --color-on-danger: var(--ds-color-on-danger);
+
+  /* Shape & elevation — override Tailwind's defaults with token values. */
+  --radius-sm: var(--ds-radius-sm);
+  --radius-md: var(--ds-radius-md);
+  --radius-lg: var(--ds-radius-lg);
+  --shadow-sm: var(--ds-shadow-sm);
+  --shadow-md: var(--ds-shadow-md);
+
+  /* Typography. */
+  --font-sans: var(--ds-font-sans);
+  --font-mono: var(--ds-font-mono);
+}
+
+body {
+  background-color: var(--ds-color-canvas);
+  color: var(--ds-color-ink);
+  font-family: var(--ds-font-sans);
+  -webkit-font-smoothing: antialiased;
+  /* Soften the flash when the user switches themes. */
+  transition: background-color 150ms ease;
+}

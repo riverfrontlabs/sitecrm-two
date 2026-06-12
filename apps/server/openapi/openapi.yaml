@@ -1,0 +1,219 @@
+# OpenAPI contract for the sitetwo-oh REST API.
+#
+# This file is the source of truth for the API's shape. It is:
+#   - served interactively (Swagger UI) at http://localhost:3001/docs
+#   - mirrored by the Fastify JSON schemas in src/routes/ (request/response
+#     validation) and by the TypeScript types in apps/web/src/api/client.ts
+#
+# When changing an endpoint, update all three places in the same commit.
+openapi: 3.1.0
+
+info:
+  title: sitetwo-oh API
+  version: 0.1.0
+  description: |
+    REST API backing the sitetwo-oh web application.
+
+    Projects are stored in memory and reseeded on every server restart —
+    persistence is intentionally out of scope for this stage of the project.
+  contact:
+    name: sitetwo-oh maintainers
+
+servers:
+  - url: http://localhost:3001
+    description: Local development
+
+tags:
+  - name: meta
+    description: Service health and metadata.
+  - name: projects
+    description: Portfolio project entries.
+
+paths:
+  /api/health:
+    get:
+      operationId: getHealth
+      tags: [meta]
+      summary: Service health probe
+      description: >
+        Liveness check. Returns the service status and current uptime;
+        suitable for load-balancer and uptime monitoring.
+      responses:
+        '200':
+          description: The service is up.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Health'
+              example:
+                status: ok
+                uptimeSeconds: 1234.5
+
+  /api/projects:
+    get:
+      operationId: listProjects
+      tags: [projects]
+      summary: List all projects
+      description: Returns every project, newest first.
+      responses:
+        '200':
+          description: The full list of projects.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Project'
+    post:
+      operationId: createProject
+      tags: [projects]
+      summary: Create a project
+      description: >
+        Creates a project from the supplied fields. The server assigns the
+        `id` and `createdAt` values.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NewProject'
+            example:
+              title: Personal site v2
+              description: Rebuild of my portfolio with a themeable design system.
+              url: https://example.com
+              tags: [react, fastify]
+      responses:
+        '201':
+          description: The project was created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Project'
+        '400':
+          description: The request body failed validation.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                statusCode: 400
+                error: Bad Request
+                message: body must have required property 'title'
+
+  /api/projects/{projectId}:
+    parameters:
+      - name: projectId
+        in: path
+        required: true
+        description: Identifier assigned by the server at creation time.
+        schema:
+          type: string
+          format: uuid
+    get:
+      operationId: getProject
+      tags: [projects]
+      summary: Fetch a single project
+      responses:
+        '200':
+          description: The requested project.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Project'
+        '404':
+          description: No project exists with that id.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                statusCode: 404
+                error: Not Found
+                message: Project not found
+    delete:
+      operationId: deleteProject
+      tags: [projects]
+      summary: Delete a project
+      responses:
+        '204':
+          description: The project was deleted. No body is returned.
+        '404':
+          description: No project exists with that id.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+components:
+  schemas:
+    Health:
+      type: object
+      required: [status, uptimeSeconds]
+      properties:
+        status:
+          type: string
+          enum: [ok]
+          description: Always `ok` while the service can answer requests.
+        uptimeSeconds:
+          type: number
+          description: Seconds since the Node.js process started.
+
+    NewProject:
+      type: object
+      description: Client-supplied fields for creating a project.
+      required: [title, description]
+      additionalProperties: false
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 120
+          description: Short display name.
+        description:
+          type: string
+          minLength: 1
+          maxLength: 2000
+          description: What the project is and why it exists.
+        url:
+          type: string
+          format: uri
+          description: Optional link to the live project or repository.
+        tags:
+          type: array
+          maxItems: 10
+          items:
+            type: string
+            minLength: 1
+            maxLength: 30
+          description: Optional free-form labels (e.g. tech stack).
+
+    Project:
+      description: A stored project; everything in NewProject plus server-assigned fields.
+      allOf:
+        - $ref: '#/components/schemas/NewProject'
+        - type: object
+          required: [id, createdAt]
+          properties:
+            id:
+              type: string
+              format: uuid
+              description: Server-assigned identifier.
+            createdAt:
+              type: string
+              format: date-time
+              description: Creation timestamp (ISO 8601, UTC).
+
+    Error:
+      type: object
+      description: Standard error envelope (Fastify default shape).
+      required: [statusCode, error, message]
+      properties:
+        statusCode:
+          type: integer
+          description: HTTP status code, repeated in the body.
+        error:
+          type: string
+          description: HTTP reason phrase, e.g. `Not Found`.
+        message:
+          type: string
+          description: Human-readable explanation of what went wrong.

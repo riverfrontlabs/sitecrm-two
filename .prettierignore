@@ -1,0 +1,6 @@
+# Build output & dependencies (node_modules is ignored by default)
+dist/
+coverage/
+
+# Generated lockfile — npm owns its formatting
+package-lock.json

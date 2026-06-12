@@ -1,0 +1,120 @@
+/**
+ * Design tokens — the single source of truth for the visual language.
+ *
+ * Every token is a CSS custom property under the `--ds-` namespace. Themes
+ * are alternate values for the *same* token names, selected by the
+ * `data-theme` attribute on the document element (see `<ThemeProvider>`).
+ * Components never reference raw colors; they only ever use semantic tokens,
+ * which is what makes the whole system themeable.
+ *
+ * Token contract (every theme MUST define all of these):
+ *
+ *   Color — surfaces             Color — content
+ *   --ds-color-canvas   page bg  --ds-color-ink        primary text
+ *   --ds-color-surface  card bg  --ds-color-ink-muted  secondary text
+ *   --ds-color-overlay  inset bg --ds-color-border     hairlines
+ *
+ *   Color — interactive                Color — status
+ *   --ds-color-primary        brand    --ds-color-success
+ *   --ds-color-primary-strong hover    --ds-color-warning
+ *   --ds-color-on-primary     fg on it --ds-color-danger
+ *   --ds-color-ring           focus    --ds-color-on-danger
+ *
+ *   Shape & type
+ *   --ds-radius-sm / -md / -lg
+ *   --ds-shadow-sm / -md
+ *   --ds-font-sans / --ds-font-mono
+ *
+ * Adding a theme: copy one of the `[data-theme='…']` blocks below, rename
+ * it, change the values, and register the name in `themes.ts`.
+ */
+
+/* ------------------------------------------------------------------ */
+/* Light (default) — also applies when no data-theme attribute is set. */
+/* ------------------------------------------------------------------ */
+:root,
+[data-theme='light'] {
+  color-scheme: light;
+
+  --ds-color-canvas: #f6f7f9;
+  --ds-color-surface: #ffffff;
+  --ds-color-overlay: #eef0f3;
+  --ds-color-ink: #16181d;
+  --ds-color-ink-muted: #5b6472;
+  --ds-color-border: #dfe3e8;
+
+  --ds-color-primary: #4f46e5;
+  --ds-color-primary-strong: #4338ca;
+  --ds-color-on-primary: #ffffff;
+  --ds-color-ring: #6366f1;
+
+  --ds-color-success: #15803d;
+  --ds-color-warning: #b45309;
+  --ds-color-danger: #dc2626;
+  --ds-color-on-danger: #ffffff;
+
+  --ds-radius-sm: 0.25rem;
+  --ds-radius-md: 0.5rem;
+  --ds-radius-lg: 0.75rem;
+
+  --ds-shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.06);
+  --ds-shadow-md: 0 4px 12px -2px rgb(0 0 0 / 0.1);
+
+  --ds-font-sans: ui-sans-serif, system-ui, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --ds-font-mono: ui-monospace, 'Cascadia Code', 'Fira Code', Consolas, monospace;
+}
+
+/* ------------------------------------------------------------------ */
+/* Dark — neutral grays with a brighter primary for contrast.          */
+/* ------------------------------------------------------------------ */
+[data-theme='dark'] {
+  color-scheme: dark;
+
+  --ds-color-canvas: #101216;
+  --ds-color-surface: #1a1d23;
+  --ds-color-overlay: #23272f;
+  --ds-color-ink: #e8eaed;
+  --ds-color-ink-muted: #9aa3af;
+  --ds-color-border: #30353e;
+
+  --ds-color-primary: #818cf8;
+  --ds-color-primary-strong: #a5b4fc;
+  --ds-color-on-primary: #14163a;
+  --ds-color-ring: #818cf8;
+
+  --ds-color-success: #4ade80;
+  --ds-color-warning: #fbbf24;
+  --ds-color-danger: #f87171;
+  --ds-color-on-danger: #3d0c0c;
+
+  --ds-shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.4);
+  --ds-shadow-md: 0 4px 12px -2px rgb(0 0 0 / 0.5);
+}
+
+/* ------------------------------------------------------------------ */
+/* Ocean — demonstrates that themes are not limited to light/dark:     */
+/* a deep blue canvas with teal interactive colors.                    */
+/* ------------------------------------------------------------------ */
+[data-theme='ocean'] {
+  color-scheme: dark;
+
+  --ds-color-canvas: #0a1929;
+  --ds-color-surface: #102a43;
+  --ds-color-overlay: #173a5e;
+  --ds-color-ink: #e6f1ff;
+  --ds-color-ink-muted: #8fb3d9;
+  --ds-color-border: #1e4976;
+
+  --ds-color-primary: #2dd4bf;
+  --ds-color-primary-strong: #5eead4;
+  --ds-color-on-primary: #042f2e;
+  --ds-color-ring: #2dd4bf;
+
+  --ds-color-success: #34d399;
+  --ds-color-warning: #fbbf24;
+  --ds-color-danger: #fb7185;
+  --ds-color-on-danger: #4c0519;
+
+  --ds-shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.45);
+  --ds-shadow-md: 0 4px 12px -2px rgb(0 0 0 / 0.55);
+}
