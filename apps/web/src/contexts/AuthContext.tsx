@@ -43,8 +43,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser(u);
         setIsLoading(false);
       })
-      .catch(() => {
-        setAuthToken(null);
+      .catch((err) => {
+        // Only discard the token when the server actively rejects it (401).
+        // A transient failure (network blip, 503) must NOT log the user out —
+        // keep the token so a later request can succeed without re-login.
+        if (err instanceof ApiError && err.status === 401) {
+          setAuthToken(null);
+        }
         setIsLoading(false);
       });
   }, []);

@@ -1,23 +1,24 @@
-# @sitetwo/server
+# @sitecrm/server
 
-The REST API for sitetwo-oh: Node.js + TypeScript + [Fastify](https://fastify.dev).
+The REST API for sitecrm-two: Node.js + TypeScript + [Fastify](https://fastify.dev).
 
 ## API documentation
 
-The contract is **spec-first**: [`openapi/openapi.yaml`](openapi/openapi.yaml)
-is the source of truth for every endpoint, schema, and error shape.
+The contract is **code-first**: the Fastify route `schema` blocks in
+`src/routes/` ARE the spec. `@fastify/swagger` (dynamic mode) generates the
+OpenAPI document from them at boot, so there is no separate YAML to drift.
 
 With the server running (`npm run dev:api` at the repo root):
 
 | URL                               | What you get                                 |
 | --------------------------------- | -------------------------------------------- |
-| <http://localhost:3001/docs>      | Interactive Swagger UI ("try it out" works). |
-| <http://localhost:3001/docs/yaml> | The raw YAML spec (for codegen/clients).     |
-| <http://localhost:3001/docs/json> | The spec as JSON.                            |
+| <http://localhost:3000/docs>      | Interactive Swagger UI ("try it out" works). |
+| <http://localhost:3000/docs/yaml> | The generated spec as YAML (for codegen).    |
+| <http://localhost:3000/docs/json> | The generated spec as JSON.                  |
 
-The Fastify route schemas in `src/routes/` and the web client types in
-`apps/web/src/api/client.ts` mirror the spec. **When changing an endpoint,
-update all three in the same commit.**
+Shared wire types live in `@sitecrm/types`, consumed by both the route schemas
+and the web client (`apps/web/src/api/client.ts`). **When changing an endpoint,
+update the route schema and the shared type in the same commit.**
 
 ## Endpoints (summary)
 
@@ -56,7 +57,7 @@ npm run dev:api                              # auto-loads the .env file
 Postgres-backed integration tests are opt-in (they need a real database):
 
 ```bash
-TEST_DATABASE_URL=postgres://sitetwo:sitetwo@localhost:5432/sitetwo npm test -w @sitetwo/server
+TEST_DATABASE_URL=postgres://sitecrm:sitecrm@localhost:5432/sitecrm npm test -w @sitecrm/server
 ```
 
 ## Docker
@@ -67,7 +68,7 @@ must be built **from the repo root** because dependency install is driven by
 the monorepo's root lockfile — the compose file already does this:
 
 ```bash
-docker compose up --build    # API on :3001 + Postgres on :5432
+docker compose up --build    # API on :3000 + Postgres on :5432
 docker compose down          # stop; add -v to also wipe the database volume
 ```
 
@@ -77,17 +78,22 @@ docker compose down          # stop; add -v to also wipe the database volume
 src/
 ├── server.ts            entry point — builds the app and listens
 ├── app.ts               app factory (buildApp) — all wiring, no socket
-├── routes/
-│   ├── health.ts        GET /api/health
-│   └── projects.ts      /api/projects CRUD + JSON schemas
+├── db/
+│   ├── schema.ts        Drizzle schema (single source of truth for the DB)
+│   ├── index.ts         driver selection (Neon serverless vs node-postgres)
+│   └── migrate.ts       migration runner
 ├── plugins/
-│   └── openapi.ts       serves openapi.yaml at /docs (static mode)
-├── store/
-│   ├── project-store.ts           ProjectStore interface + seed data
-│   ├── memory-project-store.ts    zero-setup backend (tests, default dev)
-│   └── postgres-project-store.ts  persistent backend (DATABASE_URL)
-└── types.ts             domain types mirroring the OpenAPI schemas
+│   └── auth.ts          app.authenticate / app.authenticateSSE (JWT)
+└── routes/
+    ├── health.ts        GET /api/health
+    ├── auth.ts          /api/auth — register, login, current-user
+    ├── leads.ts         /api/leads — CRUD, notes, contact events
+    ├── notifications.ts /api/notifications — inbox + SSE stream
+    └── shared-schemas.ts shared Error schema ($ref'd by every route)
 ```
+
+Each route's `schema` block generates its OpenAPI operation; shared wire types
+live in `@sitecrm/types`.
 
 The **app-factory pattern** (`buildApp()`) is the key testability decision:
 `server.ts` builds the app and calls `listen()`; tests build the _same_ app
@@ -102,11 +108,11 @@ schemas strip any property not declared in the spec.
 
 | Command (from repo root)               | What it does                                    |
 | -------------------------------------- | ----------------------------------------------- |
-| `npm run dev:api`                      | Start with hot reload (tsx watch) on port 3001. |
-| `npm test -w @sitetwo/server`          | Run the Vitest integration suite.               |
-| `npm run build -w @sitetwo/server`     | Compile to `dist/` with tsc.                    |
-| `npm run start -w @sitetwo/server`     | Run the compiled build.                         |
-| `npm run typecheck -w @sitetwo/server` | Strict type check, no emit.                     |
+| `npm run dev:api`                      | Start with hot reload (tsx watch) on port 3000. |
+| `npm test -w @sitecrm/server`          | Run the Vitest integration suite.               |
+| `npm run build -w @sitecrm/server`     | Compile to `dist/` with tsc.                    |
+| `npm run start -w @sitecrm/server`     | Run the compiled build.                         |
+| `npm run typecheck -w @sitecrm/server` | Strict type check, no emit.                     |
 
 ## Configuration
 
@@ -116,7 +122,7 @@ A `.env` file in this package is loaded automatically when present — copy
 | Variable       | Default     | Purpose                                                |
 | -------------- | ----------- | ------------------------------------------------------ |
 | `DATABASE_URL` | _(unset)_   | Postgres connection string; unset = in-memory storage. |
-| `PORT`         | `3001`      | Listen port.                                           |
+| `PORT`         | `3000`      | Listen port.                                           |
 | `HOST`         | `127.0.0.1` | Bind address (the Docker image sets `0.0.0.0`).        |
 
 ## Conventions

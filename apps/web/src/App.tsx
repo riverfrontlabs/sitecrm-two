@@ -127,6 +127,7 @@ function NotificationBell() {
   return (
     <NavLink
       to="/notifications"
+      aria-label={count > 0 ? `Notifications, ${count} unread` : 'Notifications'}
       className={({ isActive }) =>
         cx(
           'relative rounded-md px-2 py-1.5 text-sm transition-colors',
@@ -134,9 +135,12 @@ function NotificationBell() {
         )
       }
     >
-      🔔
+      <span aria-hidden>🔔</span>
       {count > 0 && (
-        <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-interactive text-xs font-bold text-white">
+        <span
+          aria-hidden
+          className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-interactive text-xs font-bold text-white"
+        >
           {count > 9 ? '9+' : count}
         </span>
       )}

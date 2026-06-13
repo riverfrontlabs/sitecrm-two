@@ -13,8 +13,10 @@
  */
 import { and, count, desc, eq } from 'drizzle-orm';
 import type { FastifyPluginAsync } from 'fastify';
+import { NOTIFICATION_TYPES } from '@sitecrm/types';
 import type { Database } from '../app.js';
 import { notifications } from '../db/schema.js';
+import { errorRef } from './shared-schemas.js';
 
 export interface NotificationRoutesOptions {
   db?: Database;
@@ -27,7 +29,7 @@ const notificationSchema = {
   properties: {
     id: { type: 'string', format: 'uuid' },
     userId: { type: 'string', format: 'uuid' },
-    type: { type: 'string' },
+    type: { type: 'string', enum: NOTIFICATION_TYPES },
     title: { type: 'string' },
     body: { type: 'string' },
     data: { type: 'object', nullable: true },
@@ -52,19 +54,9 @@ const listNotificationsQuery = {
   type: 'object',
   additionalProperties: false,
   properties: {
-    page: { type: 'integer', minimum: 1, default: 1 },
+    page: { type: 'integer', minimum: 1, maximum: 100000, default: 1 },
     pageSize: { type: 'integer', minimum: 1, maximum: 100, default: 20 },
     unread: { type: 'boolean' },
-  },
-} as const;
-
-const errorSchema = {
-  type: 'object',
-  required: ['statusCode', 'error', 'message'],
-  properties: {
-    statusCode: { type: 'integer' },
-    error: { type: 'string' },
-    message: { type: 'string' },
   },
 } as const;
 
@@ -90,14 +82,18 @@ export const notificationRoutes: FastifyPluginAsync<NotificationRoutesOptions> =
     {
       preHandler: [app.authenticate],
       schema: {
+        tags: ['notifications'],
+        summary: 'List notifications',
+        description: 'Paginated inbox (newest first) with the total unread count for badge display.',
+        operationId: 'listNotifications',
         querystring: listNotificationsQuery,
-        response: { 200: paginatedNotificationsResponse, 503: errorSchema },
+        response: { 200: paginatedNotificationsResponse, 400: errorRef, 401: errorRef, 503: errorRef },
       },
     },
     async (request, reply) => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       if (!db) return (reply as any).status(503).send({ statusCode: 503, error: 'Service Unavailable', message: 'Database not configured' });
-      const { sub: userId } = request.user as { sub: string };
+      const { sub: userId } = request.user;
       const { page = 1, pageSize = 20, unread } = request.query;
 
       const conditions = [eq(notifications.userId, userId)];
@@ -131,12 +127,22 @@ export const notificationRoutes: FastifyPluginAsync<NotificationRoutesOptions> =
     '/notifications/:id/read',
     {
       preHandler: [app.authenticate],
-      schema: { response: { 200: notificationSchema, 404: errorSchema, 503: errorSchema } },
+      schema: {
+        tags: ['notifications'],
+        summary: 'Mark a notification read',
+        operationId: 'markNotificationRead',
+        params: {
+          type: 'object',
+          required: ['id'],
+          properties: { id: { type: 'string', description: 'Notification ID' } },
+        },
+        response: { 200: notificationSchema, 401: errorRef, 404: errorRef, 503: errorRef },
+      },
     },
     async (request, reply) => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       if (!db) return (reply as any).status(503).send({ statusCode: 503, error: 'Service Unavailable', message: 'Database not configured' });
-      const { sub: userId } = request.user as { sub: string };
+      const { sub: userId } = request.user;
 
       const [updated] = await db
         .update(notifications)
@@ -156,16 +162,21 @@ export const notificationRoutes: FastifyPluginAsync<NotificationRoutesOptions> =
     {
       preHandler: [app.authenticate],
       schema: {
+        tags: ['notifications'],
+        summary: 'Mark all notifications read',
+        description: 'Marks every unread notification read; returns how many were updated.',
+        operationId: 'markAllNotificationsRead',
         response: {
           200: { type: 'object', properties: { count: { type: 'integer' } } },
-          503: errorSchema,
+          401: errorRef,
+          503: errorRef,
         },
       },
     },
     async (request, reply) => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       if (!db) return (reply as any).status(503).send({ statusCode: 503, error: 'Service Unavailable', message: 'Database not configured' });
-      const { sub: userId } = request.user as { sub: string };
+      const { sub: userId } = request.user;
 
       const updated = await db
         .update(notifications)
@@ -185,8 +196,16 @@ export const notificationRoutes: FastifyPluginAsync<NotificationRoutesOptions> =
   app.get(
     '/notifications/stream',
     {
-      preHandler: [app.authenticate],
-      schema: { querystring: { type: 'object', properties: { token: { type: 'string' } } } },
+      preHandler: [app.authenticateSSE],
+      schema: {
+        tags: ['notifications'],
+        summary: 'Notification event stream (SSE)',
+        description:
+          'Server-Sent Events stream of new notifications. Because `EventSource` cannot set headers, the JWT is passed as the `?token=` query parameter instead of an Authorization header.',
+        operationId: 'streamNotifications',
+        security: [], // auth via ?token= query param (see description)
+        querystring: { type: 'object', properties: { token: { type: 'string', description: 'JWT (EventSource header workaround)' } } },
+      },
     },
     async (_request, reply) => {
       reply.raw.writeHead(200, {

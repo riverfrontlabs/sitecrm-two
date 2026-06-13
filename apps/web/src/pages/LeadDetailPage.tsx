@@ -5,11 +5,13 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import type { ContactEvent, Lead, Note } from '@sitecrm/types';
 import { leadsApi, ApiError } from '../api/client';
 import { statusBadgeTone, statusLabel, ALL_STATUSES } from '../utils/leadStatus';
+import { safeExternalHref } from '../utils/url';
 
 export function LeadDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const qc = useQueryClient();
+  const [actionError, setActionError] = useState('');
 
   const leadQuery = useQuery({
     queryKey: ['leads', id],
@@ -30,9 +32,11 @@ export function LeadDetailPage() {
   const updateMutation = useMutation({
     mutationFn: (patch: Partial<Lead>) => leadsApi.update(id!, patch),
     onSuccess: () => {
+      setActionError('');
       qc.invalidateQueries({ queryKey: ['leads', id] });
       qc.invalidateQueries({ queryKey: ['leads'] });
     },
+    onError: (err) => setActionError(err instanceof ApiError ? err.message : 'Update failed. Please try again.'),
   });
 
   const deleteMutation = useMutation({
@@ -41,6 +45,7 @@ export function LeadDetailPage() {
       qc.invalidateQueries({ queryKey: ['leads'] });
       navigate('/leads');
     },
+    onError: (err) => setActionError(err instanceof ApiError ? err.message : 'Delete failed. Please try again.'),
   });
 
   if (leadQuery.isPending) return <p className="text-sm text-ink-muted">Loading…</p>;
@@ -77,6 +82,12 @@ export function LeadDetailPage() {
         </div>
       </div>
 
+      {actionError && (
+        <p role="alert" className="rounded-md border border-danger/30 bg-danger/10 px-3 py-2 text-sm text-danger">
+          {actionError}
+        </p>
+      )}
+
       <div className="grid gap-6 lg:grid-cols-[1fr_380px]">
         <div className="space-y-4">
           {/* Lead info */}
@@ -88,7 +99,7 @@ export function LeadDetailPage() {
             <div className="p-5">
               <dl className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
                 <InfoField label="Email" value={lead.email} link={lead.email ? `mailto:${lead.email}` : undefined} />
-                <InfoField label="Website" value={lead.website} link={lead.website ?? undefined} external />
+                <InfoField label="Website" value={lead.website} link={safeExternalHref(lead.website)} external />
                 <InfoField label="Location" value={lead.location} />
                 <InfoField label="Type" value={lead.type} />
                 <InfoField label="Facebook Page" value={lead.facebookPageId} />
@@ -179,6 +190,7 @@ function NotesSection({ leadId, notes }: { leadId: string; notes: Note[] }) {
   const deleteNote = useMutation({
     mutationFn: (noteId: string) => leadsApi.deleteNote(leadId, noteId),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['leads', leadId, 'notes'] }),
+    onError: (err) => setError(err instanceof ApiError ? err.message : 'Failed to delete note'),
   });
 
   const handleSubmit = (e: FormEvent) => {

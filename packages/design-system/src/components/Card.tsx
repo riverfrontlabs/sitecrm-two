@@ -1,4 +1,4 @@
-import type { HTMLAttributes, ReactNode } from 'react';
+import { useId, type HTMLAttributes, type ReactNode } from 'react';
 import { cx } from '../utils/cx';
 
 /**
@@ -13,6 +13,12 @@ export interface CardProps extends Omit<HTMLAttributes<HTMLDivElement>, 'title'>
   description?: ReactNode;
   /** Optional footer rendered below the body, separated by a hairline. */
   footer?: ReactNode;
+  /**
+   * Heading level for `title` (2–6). Defaults to 3. Set it to match the
+   * surrounding document outline so screen-reader heading navigation stays
+   * correct (e.g. `headingLevel={2}` for top-level cards under an `<h1>`).
+   */
+  headingLevel?: 2 | 3 | 4 | 5 | 6;
   /** Card body. */
   children?: ReactNode;
 }
@@ -30,15 +36,31 @@ export interface CardProps extends Omit<HTMLAttributes<HTMLDivElement>, 'title'>
  *   <p>All 132 checks passing.</p>
  * </Card>
  */
-export function Card({ title, description, footer, children, className, ...rest }: CardProps) {
+export function Card({
+  title,
+  description,
+  footer,
+  children,
+  headingLevel = 3,
+  className,
+  ...rest
+}: CardProps) {
+  const headingId = useId();
+  const Heading = `h${headingLevel}` as const;
   return (
     <div
       className={cx('rounded-lg border border-border bg-surface p-5 shadow-sm', className)}
+      // Associate the card region with its heading for assistive tech.
+      aria-labelledby={title ? headingId : undefined}
       {...rest}
     >
       {(title || description) && (
         <header className="mb-3">
-          {title && <h3 className="text-base font-semibold text-ink">{title}</h3>}
+          {title && (
+            <Heading id={headingId} className="text-base font-semibold text-ink">
+              {title}
+            </Heading>
+          )}
           {description && <p className="mt-0.5 text-sm text-ink-muted">{description}</p>}
         </header>
       )}

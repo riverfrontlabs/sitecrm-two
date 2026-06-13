@@ -18,7 +18,7 @@ data "aws_availability_zones" "available" {
 }
 
 locals {
-  # Shared naming prefix, e.g. "sitetwo-oh-dev".
+  # Shared naming prefix, e.g. "sitecrm-dev".
   name = "${var.project_name}-${var.environment}"
 
   # Two AZs is the minimum for an RDS subnet group.

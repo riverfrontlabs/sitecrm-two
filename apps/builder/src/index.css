@@ -1,2 +1,17 @@
-@import '@sitecrm/design-system/tokens.css';
+/**
+ * Builder app stylesheet: Tailwind v4 + the design system.
+ *
+ * The theme bridge (`@theme inline` + `@source`) is imported from the design
+ * system so design-system components (`Button`, `Card`, …) render with the same
+ * `bg-primary`/`text-ink`/`ring-ring` utilities here as in the web app.
+ */
 @import 'tailwindcss';
+@import '@sitecrm/design-system/tokens.css';
+@import '@sitecrm/design-system/theme.css';
+
+body {
+  background-color: var(--ds-color-canvas);
+  color: var(--ds-color-ink);
+  font-family: var(--ds-font-sans);
+  -webkit-font-smoothing: antialiased;
+}

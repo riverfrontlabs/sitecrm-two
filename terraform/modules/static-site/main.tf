@@ -45,6 +45,26 @@ resource "aws_s3_bucket_versioning" "site" {
   versioning_configuration { status = "Enabled" }
 }
 
+# Each `s3 sync --delete` of a rebuilt SPA leaves the old (hashed) assets as
+# noncurrent versions. Expire them so storage doesn't grow unbounded across
+# deploys while still keeping a short rollback window.
+resource "aws_s3_bucket_lifecycle_configuration" "site" {
+  bucket = aws_s3_bucket.site.id
+
+  rule {
+    id     = "expire-noncurrent-versions"
+    status = "Enabled"
+
+    filter {}
+
+    noncurrent_version_expiration {
+      noncurrent_days = 30
+    }
+  }
+
+  depends_on = [aws_s3_bucket_versioning.site]
+}
+
 # ------------------------------------------------------------ CloudFront ----
 
 resource "aws_cloudfront_origin_access_control" "site" {
@@ -105,9 +125,9 @@ resource "aws_cloudfront_distribution" "site" {
   viewer_certificate {
     # If a cert ARN is supplied, use it; otherwise fall back to the default
     # CloudFront cert (works only for *.cloudfront.net domains).
-    acm_certificate_arn      = var.acm_certificate_arn != "" ? var.acm_certificate_arn : null
-    ssl_support_method       = var.acm_certificate_arn != "" ? "sni-only" : null
-    minimum_protocol_version = var.acm_certificate_arn != "" ? "TLSv1.2_2021" : null
+    acm_certificate_arn            = var.acm_certificate_arn != "" ? var.acm_certificate_arn : null
+    ssl_support_method             = var.acm_certificate_arn != "" ? "sni-only" : null
+    minimum_protocol_version       = var.acm_certificate_arn != "" ? "TLSv1.2_2021" : null
     cloudfront_default_certificate = var.acm_certificate_arn == ""
   }
 }

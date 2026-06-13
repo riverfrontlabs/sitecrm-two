@@ -14,7 +14,7 @@ function ThemeProbe() {
   );
 }
 
-const STORAGE_KEY = 'sitetwo.theme.test';
+const STORAGE_KEY = 'sitecrm.theme.test';
 
 describe('ThemeProvider', () => {
   beforeEach(() => window.localStorage.clear());

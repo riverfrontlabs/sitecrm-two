@@ -1,7 +1,7 @@
-# @sitetwo/web
+# @sitecrm/web
 
-The React frontend for sitetwo-oh: Vite + React 19 + TypeScript + Tailwind
-CSS v4, themed end-to-end by `@sitetwo/design-system`.
+The React frontend for sitecrm-two: Vite + React 19 + TypeScript + Tailwind
+CSS v4, themed end-to-end by `@sitecrm/design-system`.
 
 ## Pages
 
@@ -14,22 +14,22 @@ CSS v4, themed end-to-end by `@sitetwo/design-system`.
 
 ```
 ┌─────────────────────────┐     /api/* (vite proxy)    ┌──────────────────┐
-│ @sitetwo/web (5173)     │ ─────────────────────────► │ @sitetwo/server  │
-│  pages/ components/     │                            │ (3001)           │
-│  api/client.ts ←────────┼── mirrors openapi.yaml ──► │ openapi/         │
+│ @sitecrm/web (5173)     │ ─────────────────────────► │ @sitecrm/server  │
+│  pages/ components/     │                            │ (3000)           │
+│  api/client.ts ←──── @sitecrm/types ───────────────► │ src/routes/      │
 └────────────┬────────────┘                            └──────────────────┘
              │ imports components + tokens
              ▼
 ┌─────────────────────────┐
-│ @sitetwo/design-system  │
+│ @sitecrm/design-system  │
 └─────────────────────────┘
 ```
 
 - **API access** goes through [`src/api/client.ts`](src/api/client.ts) — a
-  typed client whose functions map 1:1 to the operations in
-  [`apps/server/openapi/openapi.yaml`](../server/openapi/openapi.yaml).
-  In development Vite proxies `/api/*` to port 3001 (see `vite.config.ts`),
-  so app code only ever uses relative URLs.
+  typed client whose functions map 1:1 to the server's route operations
+  (whose schemas generate the OpenAPI spec at `/docs`). Shared request/response
+  types come from `@sitecrm/types`. In development Vite proxies `/api/*` to
+  port 3000 (see `vite.config.ts`), so app code only ever uses relative URLs.
 - **Styling** is Tailwind v4 with zero hard-coded colors:
   [`src/index.css`](src/index.css) imports the design system's token contract
   and maps it into Tailwind namespaces (`bg-surface`, `text-ink`,
@@ -56,9 +56,9 @@ src/
 | Command (from repo root)          | What it does                                 |
 | --------------------------------- | -------------------------------------------- |
 | `npm run dev:web`                 | Vite dev server on <http://localhost:5173>.  |
-| `npm test -w @sitetwo/web`        | Vitest + Testing Library suite (jsdom).      |
-| `npm run build -w @sitetwo/web`   | Type-check then production build to `dist/`. |
-| `npm run preview -w @sitetwo/web` | Serve the production build locally.          |
+| `npm test -w @sitecrm/web`        | Vitest + Testing Library suite (jsdom).      |
+| `npm run build -w @sitecrm/web`   | Type-check then production build to `dist/`. |
+| `npm run preview -w @sitecrm/web` | Serve the production build locally.          |
 
 ## Testing approach
 

@@ -39,3 +39,8 @@ output "ecs_cluster_name" {
   description = "For `aws ecs update-service --force-new-deployment` image rollouts."
   value       = aws_ecs_cluster.main.name
 }
+
+output "intelligence_internal_url" {
+  description = "Internal Cloud Map URL the API uses to reach the Intelligence service."
+  value       = "http://intelligence.${local.name}.local:3001"
+}

@@ -5,6 +5,9 @@
   "description": "Lead intelligence API: Playwright web scraping, OpenAI-powered scoring, and prospect enrichment.",
   "type": "module",
   "main": "dist/server.js",
+  "engines": {
+    "node": ">=20.12"
+  },
   "scripts": {
     "dev": "tsx watch src/server.ts",
     "build": "tsc -p tsconfig.json",

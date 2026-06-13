@@ -47,6 +47,10 @@ export const scoreRoutes: FastifyPluginAsync = async (app) => {
     '/score',
     {
       schema: {
+        tags: ['intelligence'],
+        summary: 'Score a lead',
+        description: 'Evaluates the supplied lead signals and returns a 0–100 score, letter grade, and rationale.',
+        operationId: 'scoreLead',
         body: scoreBodySchema,
         response: {
           200: {

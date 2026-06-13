@@ -1,10 +1,10 @@
 /**
  * Typed REST client for the SiteCRM API.
  *
- * Wire shapes are defined by `apps/server/openapi/openapi.yaml` — the
- * functions here mirror that spec (operationIds map 1:1). In development,
- * Vite proxies `/api/*` to the Fastify server so all URLs are same-origin
- * relative paths.
+ * Wire shapes come from `@sitecrm/types`; the operationIds here map 1:1 to the
+ * server's routes (whose schemas generate the OpenAPI spec served at `/docs`).
+ * In development, Vite proxies `/api/*` to the Fastify server so all URLs are
+ * same-origin relative paths.
  *
  * Auth: the module stores a JWT in both module scope and `localStorage`.
  * Call `setAuthToken(token)` after login; the `request()` helper

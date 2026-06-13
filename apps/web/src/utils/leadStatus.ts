@@ -2,7 +2,7 @@
  * Shared helpers for rendering lead status — badge tone + display label.
  * Centralised so every page that shows status uses identical copy and colour.
  */
-import type { LeadStatus } from '@sitecrm/types';
+import { LEAD_STATUSES, type LeadStatus } from '@sitecrm/types';
 
 /** Maps a {@link LeadStatus} to a design-system Badge tone. */
 export function statusBadgeTone(status: LeadStatus): 'neutral' | 'primary' | 'warning' | 'success' | 'danger' {
@@ -28,4 +28,5 @@ export function statusLabel(status: LeadStatus): string {
   }
 }
 
-export const ALL_STATUSES: LeadStatus[] = ['new', 'contacted', 'qualified', 'proposal', 'won', 'lost'];
+/** Pipeline order for UI lists — re-exported from the shared source of truth. */
+export const ALL_STATUSES = LEAD_STATUSES;

@@ -117,6 +117,30 @@ resource "aws_security_group" "api" {
   tags = { Name = "${local.name}-api" }
 }
 
+resource "aws_security_group" "intelligence" {
+  name        = "${local.name}-intelligence"
+  description = "Intelligence API (ECS Fargate tasks)"
+  vpc_id      = aws_vpc.main.id
+
+  ingress {
+    description     = "HTTP from the API tasks only (internal service-to-service)"
+    from_port       = 3001
+    to_port         = 3001
+    protocol        = "tcp"
+    security_groups = [aws_security_group.api.id]
+  }
+
+  egress {
+    description = "Pull images, reach AWS APIs, scrape public websites, call OpenAI"
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = { Name = "${local.name}-intelligence" }
+}
+
 resource "aws_security_group" "db" {
   name        = "${local.name}-db"
   description = "PostgreSQL (RDS)"

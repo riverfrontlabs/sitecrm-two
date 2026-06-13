@@ -7,7 +7,17 @@ import type { FastifyPluginAsync } from 'fastify';
  * responsive without exercising any external dependencies (database, OpenAI).
  */
 export const healthRoutes: FastifyPluginAsync = async (app) => {
-  app.get('/health', { schema: { response: { 200: { type: 'object', properties: { status: { type: 'string' } } } } } }, async () => ({
-    status: 'ok',
-  }));
+  app.get(
+    '/health',
+    {
+      schema: {
+        tags: ['system'],
+        summary: 'Liveness probe',
+        description: 'Returns `200 { status: "ok" }` whenever the process is responsive. Does not exercise OpenAI or Playwright.',
+        operationId: 'getHealth',
+        response: { 200: { type: 'object', properties: { status: { type: 'string' } } } },
+      },
+    },
+    async () => ({ status: 'ok' }),
+  );
 };

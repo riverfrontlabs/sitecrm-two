@@ -6,7 +6,7 @@
 #   terraform {
 #     backend "s3" {
 #       bucket       = "your-tf-state-bucket"
-#       key          = "sitetwo-oh/terraform.tfstate"
+#       key          = "sitecrm-two/terraform.tfstate"
 #       region       = "us-east-1"
 #       use_lockfile = true
 #     }

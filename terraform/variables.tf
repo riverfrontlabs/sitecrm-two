@@ -19,6 +19,32 @@ variable "aws_region" {
   default     = "us-east-1"
 }
 
+# ----------------------------------------------------------- intelligence ----
+
+variable "intelligence_image_tag" {
+  description = "Tag of the Intelligence API image in its ECR repository."
+  type        = string
+  default     = "latest"
+}
+
+variable "intelligence_desired_count" {
+  description = "Number of Intelligence tasks. 1 is fine for dev."
+  type        = number
+  default     = 1
+}
+
+variable "intelligence_cpu" {
+  description = "Fargate CPU units for the Intelligence task (Playwright is heavier; 512 = 0.5 vCPU)."
+  type        = number
+  default     = 512
+}
+
+variable "intelligence_memory" {
+  description = "Fargate memory (MiB) for the Intelligence task (headless Chromium needs headroom)."
+  type        = number
+  default     = 1024
+}
+
 # ----------------------------------------------------------------- API ----
 
 variable "api_image_tag" {
@@ -79,13 +105,24 @@ variable "db_username" {
 
 variable "jwt_secret" {
   description = <<-EOT
-    JWT signing secret for the SiteCRM API.  Never put a real value here or
-    in terraform.tfvars — pass it via the environment instead:
+    JWT signing secret for the SiteCRM API. Never put a real value here or in
+    terraform.tfvars — pass it via the environment instead:
       export TF_VAR_jwt_secret=$(openssl rand -hex 32)
-    An empty string causes the API to fall back to its insecure dev default
-    and log a warning on startup.
+    If left empty, a strong random secret is generated and stored in Secrets
+    Manager (see database.tf). Supply your own to keep it stable across applies.
   EOT
-  type      = string
-  sensitive = true
-  default   = ""
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "openai_api_key" {
+  description = <<-EOT
+    OpenAI API key for the Intelligence service (scoring/enrichment). Pass via
+    the environment, never in tfvars:
+      export TF_VAR_openai_api_key=sk-...
+  EOT
+  type        = string
+  sensitive   = true
+  default     = ""
 }

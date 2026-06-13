@@ -1,5 +1,5 @@
 /**
- * @sitetwo/design-system — public API.
+ * @sitecrm/design-system — public API.
  *
  * A themeable React design system. Visuals are driven entirely by CSS
  * custom properties ("design tokens") defined in `tokens.css`; components
@@ -7,8 +7,9 @@
  * restyles the entire app instantly.
  *
  * Consumers must:
- * 1. Import the tokens once: `@import '@sitetwo/design-system/tokens.css';`
- * 2. Wrap the app in {@link ThemeProvider}.
+ * 1. Import the tokens once: `@import '@sitecrm/design-system/tokens.css';`
+ * 2. Import the Tailwind theme bridge: `@import '@sitecrm/design-system/theme.css';`
+ * 3. Wrap the app in {@link ThemeProvider}.
  *
  * A live, browsable preview of every component and token lives in the web
  * app at `/design`.

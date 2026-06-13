@@ -6,6 +6,7 @@ import type { Lead, LeadStatus } from '@sitecrm/types';
 import { Input } from '@sitecrm/design-system';
 import { leadsApi, ApiError } from '../api/client';
 import { statusBadgeTone, statusLabel, ALL_STATUSES } from '../utils/leadStatus';
+import { displayHost, safeExternalHref } from '../utils/url';
 
 const PAGE_SIZE = 20;
 
@@ -70,6 +71,7 @@ export function LeadsPage() {
       <div className="flex flex-wrap items-center gap-2">
         <input
           type="search"
+          aria-label="Search leads by name, email, or location"
           placeholder="Search name, email, location…"
           value={search}
           onChange={e => setFilter('search', e.target.value || null)}
@@ -159,6 +161,7 @@ export function LeadsPage() {
 }
 
 function LeadRow({ lead }: { lead: Lead }) {
+  const websiteHref = safeExternalHref(lead.website);
   return (
     <tr className="hover:bg-overlay/50">
       <td className="px-4 py-3">
@@ -177,10 +180,12 @@ function LeadRow({ lead }: { lead: Lead }) {
         ) : '–'}
       </td>
       <td className="px-4 py-3 text-ink-muted">
-        {lead.website ? (
-          <a href={lead.website} target="_blank" rel="noopener noreferrer" className="hover:underline">
-            {lead.website.replace(/^https?:\/\//, '')}
+        {websiteHref ? (
+          <a href={websiteHref} target="_blank" rel="noopener noreferrer" className="hover:underline">
+            {displayHost(lead.website!)}
           </a>
+        ) : lead.website ? (
+          displayHost(lead.website)
         ) : '–'}
       </td>
       <td className="px-4 py-3 text-right tabular-nums">
@@ -217,10 +222,20 @@ function AddLeadModal({ onClose }: { onClose: () => void }) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/30 px-4 backdrop-blur-sm">
-      <div className="w-full max-w-md overflow-hidden rounded-lg border border-border bg-surface shadow-lg">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-ink/30 px-4 backdrop-blur-sm"
+      onClick={onClose}
+      onKeyDown={e => { if (e.key === 'Escape') onClose(); }}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="add-lead-title"
+        className="w-full max-w-md overflow-hidden rounded-lg border border-border bg-surface shadow-lg"
+        onClick={e => e.stopPropagation()}
+      >
         <div className="border-b border-border px-4 py-3">
-          <h2 className="font-semibold text-ink">Add lead</h2>
+          <h2 id="add-lead-title" className="font-semibold text-ink">Add lead</h2>
         </div>
         <div className="p-5">
           <form onSubmit={handleSubmit} className="flex flex-col gap-3">

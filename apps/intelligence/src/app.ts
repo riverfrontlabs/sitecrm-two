@@ -11,8 +11,8 @@
  *
  * Registered plugins:
  * - `@fastify/cors`        — restricted to the internal Docker network in prod
- * - `@fastify/swagger`     — serves `openapi/openapi.yaml` at `/docs`
- * - `@fastify/swagger-ui`  — interactive Swagger UI
+ * - `@fastify/swagger`     — GENERATES the OpenAPI spec from route schemas
+ * - `@fastify/swagger-ui`  — interactive Swagger UI at `/docs` (+ /docs/json,/yaml)
  *
  * Route groups:
  * - `/health`       — liveness probe
@@ -24,14 +24,10 @@ import cors from '@fastify/cors';
 import swagger from '@fastify/swagger';
 import swaggerUi from '@fastify/swagger-ui';
 import Fastify, { type FastifyInstance } from 'fastify';
-import { resolve, dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { healthRoutes } from './routes/health.js';
 import { scrapeRoutes } from './routes/scrape.js';
 import { scoreRoutes } from './routes/score.js';
 import { enrichRoutes } from './routes/enrich.js';
-
-const __dirname = dirname(fileURLToPath(import.meta.url));
 
 /** Options for {@link buildApp}. */
 export interface BuildAppOptions {
@@ -64,17 +60,40 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
 
   const app = Fastify({ logger });
 
-  // Intelligence API is called only from the main server container — keep CORS
-  // locked down in production via the CORS_ORIGIN env var.
-  await app.register(cors, {
-    origin: process.env.CORS_ORIGIN ?? true,
-  });
+  // Intelligence API is called only from the main server container. Lock CORS
+  // down via CORS_ORIGIN; fail CLOSED in production if it's unset (an open
+  // default on an internal service is a footgun), but stay open in dev.
+  const corsOrigin = process.env.CORS_ORIGIN
+    ? process.env.CORS_ORIGIN.split(',').map((o) => o.trim()).filter(Boolean)
+    : process.env.NODE_ENV === 'production'
+      ? false
+      : true;
+  await app.register(cors, { origin: corsOrigin });
 
+  // OpenAPI spec is GENERATED from the route schemas (dynamic mode) — no
+  // hand-maintained YAML to drift.
   await app.register(swagger, {
-    mode: 'static',
-    specification: {
-      path: resolve(__dirname, '../openapi/openapi.yaml'),
-      baseDir: resolve(__dirname, '../openapi'),
+    openapi: {
+      openapi: '3.1.0',
+      info: {
+        title: 'SiteCRM Intelligence API',
+        version: '0.1.0',
+        description: [
+          'Internal service for lead intelligence: Playwright-based website scraping,',
+          'OpenAI-powered scoring, and a combined enrichment pipeline.',
+          '',
+          'Called by the main SiteCRM server, not the browser. Access is restricted to',
+          'the internal network in production via the `CORS_ORIGIN` env var.',
+        ].join('\n'),
+      },
+      servers: [
+        { url: 'http://intelligence.localhost', description: 'Local development (Traefik)' },
+        { url: 'http://localhost:3001', description: 'Direct local development' },
+      ],
+      tags: [
+        { name: 'system', description: 'Health and operational endpoints' },
+        { name: 'intelligence', description: 'Lead scraping, scoring, and enrichment' },
+      ],
     },
   });
 

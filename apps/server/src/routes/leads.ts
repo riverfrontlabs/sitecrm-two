@@ -16,29 +16,30 @@
  *   DELETE /leads/:id/notes/:noteId   — remove a specific note
  *   GET    /leads/:id/events          — list contact events newest-first
  *
- * Schemas mirror `components/schemas` in `openapi/openapi.yaml` — update
- * both files together when changing any request/response shape.
+ * The route `schema` blocks are the source for the generated OpenAPI spec
+ * (dynamic `@fastify/swagger`); there is no separate spec file to keep in sync.
  */
 import { and, count, desc, eq, ilike, inArray, or } from 'drizzle-orm';
 import type { FastifyPluginAsync } from 'fastify';
+import {
+  CONTACT_DIRECTIONS,
+  CONTACT_EVENT_TYPES,
+  LEAD_STATUSES,
+  OUTREACH_CHANNELS,
+  type LeadStatus,
+} from '@sitecrm/types';
 import type { Database } from '../app.js';
 import { contactEvents, leads, notes } from '../db/schema.js';
+import { errorRef } from './shared-schemas.js';
 
 export interface LeadRoutesOptions {
   /** Drizzle database instance. Routes return 503 when omitted. */
   db?: Database;
 }
 
-// ── JSON schemas (mirror openapi.yaml components/schemas) ────────────────────
-
-const LEAD_STATUSES = ['new', 'contacted', 'qualified', 'proposal', 'won', 'lost'] as const;
-const CHANNELS = ['email', 'facebook_dm', 'instagram_dm'] as const;
-const EVENT_TYPES = [
-  'email_sent', 'email_opened', 'email_clicked',
-  'facebook_dm_sent', 'facebook_dm_received',
-  'instagram_dm_sent', 'instagram_dm_received',
-  'call', 'meeting',
-] as const;
+// ── JSON schemas (source for the generated OpenAPI `leads` operations) ───────
+// Enum value lists are imported from @sitecrm/types so the schema, the DB
+// column `$type`s, and the shared wire types can never drift apart.
 
 const leadSchema = {
   type: 'object',
@@ -74,7 +75,9 @@ const createLeadBody = {
   properties: {
     name: { type: 'string', minLength: 1, maxLength: 255 },
     email: { type: 'string', format: 'email', maxLength: 255 },
-    website: { type: 'string', maxLength: 512 },
+    // Only http(s) URLs — blocks `javascript:`/`data:` schemes that would be
+    // XSS vectors when rendered as an href in the web app.
+    website: { type: 'string', format: 'uri', pattern: '^https?://', maxLength: 512 },
     facebookPageId: { type: 'string', maxLength: 255 },
     instagramAccountId: { type: 'string', maxLength: 255 },
     type: { type: 'string', maxLength: 100 },
@@ -92,7 +95,7 @@ const updateLeadBody = {
   properties: {
     name: { type: 'string', minLength: 1, maxLength: 255 },
     email: { type: ['string', 'null'], format: 'email', maxLength: 255 },
-    website: { type: ['string', 'null'], maxLength: 512 },
+    website: { type: ['string', 'null'], format: 'uri', pattern: '^https?://', maxLength: 512 },
     facebookPageId: { type: ['string', 'null'], maxLength: 255 },
     instagramAccountId: { type: ['string', 'null'], maxLength: 255 },
     websiteScore: { type: ['number', 'null'], minimum: 0, maximum: 100 },
@@ -114,7 +117,7 @@ const listLeadsQuery = {
   type: 'object',
   additionalProperties: false,
   properties: {
-    page: { type: 'integer', minimum: 1, default: 1 },
+    page: { type: 'integer', minimum: 1, maximum: 100000, default: 1 },
     pageSize: { type: 'integer', minimum: 1, maximum: 200, default: 20 },
     status: {
       oneOf: [
@@ -161,22 +164,27 @@ const contactEventSchema = {
   properties: {
     id: { type: 'string', format: 'uuid' },
     leadId: { type: 'string', format: 'uuid' },
-    type: { type: 'string', enum: EVENT_TYPES },
-    channel: { type: 'string', enum: CHANNELS },
-    direction: { type: 'string', enum: ['sent', 'received'] },
+    type: { type: 'string', enum: CONTACT_EVENT_TYPES },
+    channel: { type: 'string', enum: OUTREACH_CHANNELS },
+    direction: { type: 'string', enum: CONTACT_DIRECTIONS },
     detail: { type: 'string', nullable: true },
     externalId: { type: 'string', nullable: true },
     createdAt: { type: 'string', format: 'date-time' },
   },
 } as const;
 
-const errorSchema = {
+const idParam = {
   type: 'object',
-  required: ['statusCode', 'error', 'message'],
+  required: ['id'],
+  properties: { id: { type: 'string', description: 'Lead ID' } },
+} as const;
+
+const idNoteParam = {
+  type: 'object',
+  required: ['id', 'noteId'],
   properties: {
-    statusCode: { type: 'integer' },
-    error: { type: 'string' },
-    message: { type: 'string' },
+    id: { type: 'string', description: 'Lead ID' },
+    noteId: { type: 'string', description: 'Note ID' },
   },
 } as const;
 
@@ -209,7 +217,7 @@ export const leadRoutes: FastifyPluginAsync<LeadRoutesOptions> = async (app, opt
     Querystring: {
       page?: number;
       pageSize?: number;
-      status?: string | string[];
+      status?: LeadStatus | LeadStatus[];
       shortlisted?: boolean;
       search?: string;
     };
@@ -217,19 +225,25 @@ export const leadRoutes: FastifyPluginAsync<LeadRoutesOptions> = async (app, opt
     '/leads',
     {
       preHandler: [app.authenticate],
-      schema: { querystring: listLeadsQuery, response: { 200: paginatedLeadsResponse, 503: errorSchema } },
+      schema: {
+        tags: ['leads'],
+        summary: 'List leads',
+        description: 'Paginated, filterable list of the caller’s leads (newest first).',
+        operationId: 'listLeads',
+        querystring: listLeadsQuery,
+        response: { 200: paginatedLeadsResponse, 400: errorRef, 401: errorRef, 503: errorRef },
+      },
     },
     async (request, reply) => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       if (!db) return (reply as any).status(503).send({ statusCode: 503, error: 'Service Unavailable', message: 'Database not configured' });
-      const { sub: userId } = request.user as { sub: string };
+      const { sub: userId } = request.user;
       const { page = 1, pageSize = 20, status, shortlisted, search } = request.query;
 
       const conditions = [eq(leads.userId, userId)];
       if (status) {
         const arr = Array.isArray(status) ? status : [status];
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        conditions.push(inArray(leads.status, arr as any[]));
+        conditions.push(inArray(leads.status, arr));
       }
       if (shortlisted !== undefined) conditions.push(eq(leads.shortlisted, shortlisted));
       if (search) {
@@ -258,26 +272,31 @@ export const leadRoutes: FastifyPluginAsync<LeadRoutesOptions> = async (app, opt
       name: string;
       email?: string; website?: string; facebookPageId?: string;
       instagramAccountId?: string; type?: string; location?: string;
-      placeId?: string; status?: string; shortlisted?: boolean;
+      placeId?: string; status?: LeadStatus; shortlisted?: boolean;
     };
   }>(
     '/leads',
     {
       preHandler: [app.authenticate],
-      schema: { body: createLeadBody, response: { 201: leadSchema, 503: errorSchema } },
+      schema: {
+        tags: ['leads'],
+        summary: 'Create a lead',
+        operationId: 'createLead',
+        body: createLeadBody,
+        response: { 201: leadSchema, 400: errorRef, 401: errorRef, 503: errorRef },
+      },
     },
     async (request, reply) => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       if (!db) return (reply as any).status(503).send({ statusCode: 503, error: 'Service Unavailable', message: 'Database not configured' });
-      const { sub: userId } = request.user as { sub: string };
+      const { sub: userId } = request.user;
       const { name, email, website, facebookPageId, instagramAccountId, type, location, placeId, status, shortlisted } = request.body;
 
       const [lead] = await db
         .insert(leads)
         .values({
           userId, name, email, website, facebookPageId, instagramAccountId,
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          type, location, placeId, status: (status as any) ?? 'new', shortlisted: shortlisted ?? false,
+          type, location, placeId, status: status ?? 'new', shortlisted: shortlisted ?? false,
         })
         .returning();
 
@@ -291,12 +310,18 @@ export const leadRoutes: FastifyPluginAsync<LeadRoutesOptions> = async (app, opt
     '/leads/:id',
     {
       preHandler: [app.authenticate],
-      schema: { response: { 200: leadSchema, 404: errorSchema, 503: errorSchema } },
+      schema: {
+        tags: ['leads'],
+        summary: 'Get a lead by ID',
+        operationId: 'getLead',
+        params: idParam,
+        response: { 200: leadSchema, 401: errorRef, 404: errorRef, 503: errorRef },
+      },
     },
     async (request, reply) => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       if (!db) return (reply as any).status(503).send({ statusCode: 503, error: 'Service Unavailable', message: 'Database not configured' });
-      const { sub: userId } = request.user as { sub: string };
+      const { sub: userId } = request.user;
 
       const [lead] = await db
         .select().from(leads)
@@ -318,18 +343,26 @@ export const leadRoutes: FastifyPluginAsync<LeadRoutesOptions> = async (app, opt
       websiteScore: number | null; websiteGrade: string | null; websiteNotes: string | null;
       score: number | null; rating: number | null; reviews: number | null;
       type: string | null; location: string | null; placeId: string | null;
-      status: string; shortlisted: boolean; linkedSiteId: string | null;
+      status: LeadStatus; shortlisted: boolean; linkedSiteId: string | null;
     }>;
   }>(
     '/leads/:id',
     {
       preHandler: [app.authenticate],
-      schema: { body: updateLeadBody, response: { 200: leadSchema, 404: errorSchema, 503: errorSchema } },
+      schema: {
+        tags: ['leads'],
+        summary: 'Update a lead',
+        description: 'Patches any mutable fields. At least one property is required.',
+        operationId: 'updateLead',
+        params: idParam,
+        body: updateLeadBody,
+        response: { 200: leadSchema, 400: errorRef, 401: errorRef, 404: errorRef, 503: errorRef },
+      },
     },
     async (request, reply) => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       if (!db) return (reply as any).status(503).send({ statusCode: 503, error: 'Service Unavailable', message: 'Database not configured' });
-      const { sub: userId } = request.user as { sub: string };
+      const { sub: userId } = request.user;
 
       const [existing] = await db
         .select({ id: leads.id }).from(leads)
@@ -339,8 +372,7 @@ export const leadRoutes: FastifyPluginAsync<LeadRoutesOptions> = async (app, opt
       if (!existing) return reply.status(404).send({ statusCode: 404, error: 'Not Found', message: 'Lead not found' });
 
       const [updated] = await db
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        .update(leads).set({ ...request.body, updatedAt: new Date() } as any)
+        .update(leads).set({ ...request.body, updatedAt: new Date() })
         .where(eq(leads.id, request.params.id))
         .returning();
 
@@ -354,12 +386,19 @@ export const leadRoutes: FastifyPluginAsync<LeadRoutesOptions> = async (app, opt
     '/leads/:id',
     {
       preHandler: [app.authenticate],
-      schema: { response: { 204: {}, 404: errorSchema, 503: errorSchema } },
+      schema: {
+        tags: ['leads'],
+        summary: 'Delete a lead',
+        description: 'Hard delete; cascades to the lead’s notes and contact events.',
+        operationId: 'deleteLead',
+        params: idParam,
+        response: { 204: {}, 401: errorRef, 404: errorRef, 503: errorRef },
+      },
     },
     async (request, reply) => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       if (!db) return (reply as any).status(503).send({ statusCode: 503, error: 'Service Unavailable', message: 'Database not configured' });
-      const { sub: userId } = request.user as { sub: string };
+      const { sub: userId } = request.user;
 
       const [existing] = await db
         .select({ id: leads.id }).from(leads)
@@ -379,12 +418,18 @@ export const leadRoutes: FastifyPluginAsync<LeadRoutesOptions> = async (app, opt
     '/leads/:id/notes',
     {
       preHandler: [app.authenticate],
-      schema: { response: { 200: { type: 'array', items: noteSchema }, 404: errorSchema, 503: errorSchema } },
+      schema: {
+        tags: ['leads'],
+        summary: 'List a lead’s notes',
+        operationId: 'listNotes',
+        params: idParam,
+        response: { 200: { type: 'array', items: noteSchema }, 401: errorRef, 404: errorRef, 503: errorRef },
+      },
     },
     async (request, reply) => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       if (!db) return (reply as any).status(503).send({ statusCode: 503, error: 'Service Unavailable', message: 'Database not configured' });
-      const { sub: userId } = request.user as { sub: string };
+      const { sub: userId } = request.user;
 
       const [lead] = await db
         .select({ id: leads.id }).from(leads)
@@ -404,12 +449,19 @@ export const leadRoutes: FastifyPluginAsync<LeadRoutesOptions> = async (app, opt
     '/leads/:id/notes',
     {
       preHandler: [app.authenticate],
-      schema: { body: createNoteBody, response: { 201: noteSchema, 404: errorSchema, 503: errorSchema } },
+      schema: {
+        tags: ['leads'],
+        summary: 'Add a note to a lead',
+        operationId: 'createNote',
+        params: idParam,
+        body: createNoteBody,
+        response: { 201: noteSchema, 400: errorRef, 401: errorRef, 404: errorRef, 503: errorRef },
+      },
     },
     async (request, reply) => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       if (!db) return (reply as any).status(503).send({ statusCode: 503, error: 'Service Unavailable', message: 'Database not configured' });
-      const { sub: userId } = request.user as { sub: string };
+      const { sub: userId } = request.user;
 
       const [lead] = await db
         .select({ id: leads.id }).from(leads)
@@ -429,12 +481,18 @@ export const leadRoutes: FastifyPluginAsync<LeadRoutesOptions> = async (app, opt
     '/leads/:id/notes/:noteId',
     {
       preHandler: [app.authenticate],
-      schema: { response: { 204: {}, 404: errorSchema, 503: errorSchema } },
+      schema: {
+        tags: ['leads'],
+        summary: 'Delete a note',
+        operationId: 'deleteNote',
+        params: idNoteParam,
+        response: { 204: {}, 401: errorRef, 404: errorRef, 503: errorRef },
+      },
     },
     async (request, reply) => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       if (!db) return (reply as any).status(503).send({ statusCode: 503, error: 'Service Unavailable', message: 'Database not configured' });
-      const { sub: userId } = request.user as { sub: string };
+      const { sub: userId } = request.user;
 
       // Verify the lead belongs to this user before allowing note deletion.
       const [lead] = await db
@@ -461,13 +519,17 @@ export const leadRoutes: FastifyPluginAsync<LeadRoutesOptions> = async (app, opt
     {
       preHandler: [app.authenticate],
       schema: {
-        response: { 200: { type: 'array', items: contactEventSchema }, 404: errorSchema, 503: errorSchema },
+        tags: ['leads'],
+        summary: 'List a lead’s contact events',
+        operationId: 'listContactEvents',
+        params: idParam,
+        response: { 200: { type: 'array', items: contactEventSchema }, 401: errorRef, 404: errorRef, 503: errorRef },
       },
     },
     async (request, reply) => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       if (!db) return (reply as any).status(503).send({ statusCode: 503, error: 'Service Unavailable', message: 'Database not configured' });
-      const { sub: userId } = request.user as { sub: string };
+      const { sub: userId } = request.user;
 
       const [lead] = await db
         .select({ id: leads.id }).from(leads)
