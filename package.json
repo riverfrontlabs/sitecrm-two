@@ -1,5 +1,5 @@
 {
-  "name": "sitetwo-oh",
+  "name": "@riverfront-labs/sitecrm",
   "version": "0.1.0",
   "private": true,
   "description": "Full-stack TypeScript application: React + Tailwind frontend, Fastify REST API, and a themeable design system.",
