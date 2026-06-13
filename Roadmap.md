@@ -52,14 +52,14 @@ sitecrm-two/
 ## Phase 1 — Foundation
 **Goal:** Working monorepo with all four apps scaffolded, auth, and database layer.
 
-- [ ] Add `apps/builder` and `apps/intelligence` workspaces
-- [ ] Rename/restructure `apps/web` for CRM dashboard
-- [ ] Add `packages/types` shared type definitions
-- [ ] Add `packages/site-templates` stub
-- [ ] Replace raw `pg` driver with Drizzle ORM in `apps/server`
-- [ ] Define initial DB schemas: users, leads, sites, deployments, notifications
-- [ ] Implement JWT auth (register, login, refresh, middleware)
-- [ ] Set up Traefik in `docker-compose.yml` for all four services
+- [x] Add `apps/builder` and `apps/intelligence` workspaces
+- [x] Rename/restructure `apps/web` for CRM dashboard
+- [x] Add `packages/types` shared type definitions
+- [x] Add `packages/site-templates` stub
+- [x] Replace raw `pg` driver with Drizzle ORM in `apps/server`
+- [x] Define initial DB schemas: users, leads, sites, deployments, notifications
+- [x] Implement JWT auth (register, login, refresh, middleware)
+- [x] Set up Traefik in `docker-compose.yml` for all four services
 - [ ] Update Terraform modules: static site (S3+CloudFront) and server app (ECS+RDS) variants
 
 ---

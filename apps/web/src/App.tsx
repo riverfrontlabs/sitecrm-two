@@ -1,5 +1,5 @@
 import { NavLink, Route, Routes } from 'react-router-dom';
-import { cx } from '@sitetwo/design-system';
+import { cx } from '@sitecrm/design-system';
 import { ThemeSwitcher } from './components/ThemeSwitcher';
 import { DesignSystemPage } from './pages/DesignSystemPage';
 import { HomePage } from './pages/HomePage';

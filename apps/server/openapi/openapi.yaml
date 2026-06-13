@@ -1,152 +1,146 @@
-# OpenAPI contract for the sitetwo-oh REST API.
+# OpenAPI contract for the SiteCRM REST API.
 #
 # This file is the source of truth for the API's shape. It is:
-#   - served interactively (Swagger UI) at http://localhost:3001/docs
+#   - served interactively (Swagger UI) at http://api.localhost/docs (Traefik)
+#     or http://localhost:3000/docs (direct)
 #   - mirrored by the Fastify JSON schemas in src/routes/ (request/response
-#     validation) and by the TypeScript types in apps/web/src/api/client.ts
+#     validation) and by the TypeScript types in packages/types/src/index.ts
 #
 # When changing an endpoint, update all three places in the same commit.
 openapi: 3.1.0
 
 info:
-  title: sitetwo-oh API
+  title: SiteCRM API
   version: 0.1.0
   description: |
-    REST API backing the sitetwo-oh web application.
+    Primary REST API for SiteCRM.  Handles authentication, lead management,
+    site generation, deployments, outreach sequences, and notifications.
 
-    Projects are stored in memory and reseeded on every server restart —
-    persistence is intentionally out of scope for this stage of the project.
+    **Authentication:** Most endpoints require a Bearer JWT.  Obtain a token
+    via `POST /api/auth/login` or `POST /api/auth/register` and pass it as
+    `Authorization: Bearer <token>` on subsequent requests.
   contact:
-    name: sitetwo-oh maintainers
+    name: Riverfront Labs
 
 servers:
-  - url: http://localhost:3001
-    description: Local development
+  - url: http://api.localhost
+    description: Local development (Traefik)
+  - url: http://localhost:3000
+    description: Direct local development
 
 tags:
-  - name: meta
-    description: Service health and metadata.
-  - name: projects
-    description: Portfolio project entries.
+  - name: system
+    description: Health and operational endpoints
+  - name: auth
+    description: Registration, login, and current-user
 
 paths:
   /api/health:
     get:
       operationId: getHealth
-      tags: [meta]
-      summary: Service health probe
-      description: >
-        Liveness check. Returns the service status and current uptime;
-        suitable for load-balancer and uptime monitoring.
+      tags: [system]
+      summary: Liveness probe
+      description: |
+        Returns `200 { status: "ok" }` whenever the process is responsive.
+        Does not exercise the database or any external service.
       responses:
         '200':
-          description: The service is up.
+          description: Service is healthy
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Health'
+                $ref: '#/components/schemas/HealthResponse'
               example:
                 status: ok
-                uptimeSeconds: 1234.5
+                uptimeSeconds: 42.5
 
-  /api/projects:
-    get:
-      operationId: listProjects
-      tags: [projects]
-      summary: List all projects
-      description: Returns every project, newest first.
-      responses:
-        '200':
-          description: The full list of projects.
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/Project'
+  /api/auth/register:
     post:
-      operationId: createProject
-      tags: [projects]
-      summary: Create a project
-      description: >
-        Creates a project from the supplied fields. The server assigns the
-        `id` and `createdAt` values.
+      operationId: registerUser
+      tags: [auth]
+      summary: Create a new account
+      description: |
+        Creates a user record with a bcrypt-hashed password (cost 12) and
+        returns a signed JWT plus the public user object.
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/NewProject'
-            example:
-              title: Personal site v2
-              description: Rebuild of my portfolio with a themeable design system.
-              url: https://example.com
-              tags: [react, fastify]
+              $ref: '#/components/schemas/RegisterRequest'
       responses:
         '201':
-          description: The project was created.
+          description: Account created
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Project'
-        '400':
-          description: The request body failed validation.
+                $ref: '#/components/schemas/AuthResponse'
+        '409':
+          description: Email already in use
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
-              example:
-                statusCode: 400
-                error: Bad Request
-                message: body must have required property 'title'
 
-  /api/projects/{projectId}:
-    parameters:
-      - name: projectId
-        in: path
+  /api/auth/login:
+    post:
+      operationId: loginUser
+      tags: [auth]
+      summary: Sign in to an existing account
+      description: |
+        Verifies the supplied credentials and returns a signed JWT plus the
+        public user object.  Returns `401` for any mismatch — the response
+        intentionally does not reveal whether the email exists.
+      requestBody:
         required: true
-        description: Identifier assigned by the server at creation time.
-        schema:
-          type: string
-          format: uuid
-    get:
-      operationId: getProject
-      tags: [projects]
-      summary: Fetch a single project
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
       responses:
         '200':
-          description: The requested project.
+          description: Login successful
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Project'
-        '404':
-          description: No project exists with that id.
+                $ref: '#/components/schemas/AuthResponse'
+        '401':
+          description: Invalid email or password
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
-              example:
-                statusCode: 404
-                error: Not Found
-                message: Project not found
-    delete:
-      operationId: deleteProject
-      tags: [projects]
-      summary: Delete a project
+
+  /api/auth/me:
+    get:
+      operationId: getCurrentUser
+      tags: [auth]
+      summary: Get the current signed-in user
+      security:
+        - bearerAuth: []
       responses:
-        '204':
-          description: The project was deleted. No body is returned.
-        '404':
-          description: No project exists with that id.
+        '200':
+          description: Current user
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '401':
+          description: Missing or invalid token
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
 
 components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
   schemas:
-    Health:
+    HealthResponse:
       type: object
       required: [status, uptimeSeconds]
       properties:
@@ -158,62 +152,82 @@ components:
           type: number
           description: Seconds since the Node.js process started.
 
-    NewProject:
+    User:
       type: object
-      description: Client-supplied fields for creating a project.
-      required: [title, description]
+      required: [id, email, firstName, lastName, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+        firstName:
+          type: string
+        lastName:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    RegisterRequest:
+      type: object
+      required: [email, password, firstName, lastName]
       additionalProperties: false
       properties:
-        title:
+        email:
+          type: string
+          format: email
+          maxLength: 255
+        password:
+          type: string
+          minLength: 8
+          maxLength: 72
+          description: Stored as bcrypt hash (cost 12). Max 72 chars — bcrypt truncates beyond that.
+        firstName:
           type: string
           minLength: 1
-          maxLength: 120
-          description: Short display name.
-        description:
+          maxLength: 100
+        lastName:
           type: string
           minLength: 1
-          maxLength: 2000
-          description: What the project is and why it exists.
-        url:
-          type: string
-          format: uri
-          description: Optional link to the live project or repository.
-        tags:
-          type: array
-          maxItems: 10
-          items:
-            type: string
-            minLength: 1
-            maxLength: 30
-          description: Optional free-form labels (e.g. tech stack).
+          maxLength: 100
 
-    Project:
-      description: A stored project; everything in NewProject plus server-assigned fields.
-      allOf:
-        - $ref: '#/components/schemas/NewProject'
-        - type: object
-          required: [id, createdAt]
-          properties:
-            id:
-              type: string
-              format: uuid
-              description: Server-assigned identifier.
-            createdAt:
-              type: string
-              format: date-time
-              description: Creation timestamp (ISO 8601, UTC).
+    LoginRequest:
+      type: object
+      required: [email, password]
+      additionalProperties: false
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          minLength: 1
+
+    AuthResponse:
+      type: object
+      required: [token, user]
+      properties:
+        token:
+          type: string
+          description: Signed JWT — include as `Authorization: Bearer <token>`
+        user:
+          $ref: '#/components/schemas/User'
 
     Error:
       type: object
-      description: Standard error envelope (Fastify default shape).
       required: [statusCode, error, message]
+      description: Standard error envelope — matches Fastify's default error shape.
       properties:
         statusCode:
           type: integer
-          description: HTTP status code, repeated in the body.
         error:
           type: string
-          description: HTTP reason phrase, e.g. `Not Found`.
+          description: HTTP reason phrase, e.g. `Not Found`
         message:
           type: string
-          description: Human-readable explanation of what went wrong.
+          description: Human-readable explanation of what went wrong

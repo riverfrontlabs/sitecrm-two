@@ -8,7 +8,7 @@ import {
   type BadgeTone,
   type ButtonSize,
   type ButtonVariant,
-} from '@sitetwo/design-system';
+} from '@sitecrm/design-system';
 import type { ReactNode } from 'react';
 
 /**

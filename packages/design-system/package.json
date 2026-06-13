@@ -1,5 +1,5 @@
 {
-  "name": "@sitetwo/design-system",
+  "name": "@sitecrm/design-system",
   "version": "0.1.0",
   "private": true,
   "description": "Themeable React design system: CSS-variable design tokens, theme definitions, and accessible UI primitives.",

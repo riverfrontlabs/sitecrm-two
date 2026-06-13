@@ -1,4 +1,4 @@
-import { Badge, Button, Card, Input } from '@sitetwo/design-system';
+import { Badge, Button, Card, Input } from '@sitecrm/design-system';
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { api, ApiError, type Project } from '../api/client';
 

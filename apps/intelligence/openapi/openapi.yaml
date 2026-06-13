@@ -1,0 +1,217 @@
+openapi: 3.1.0
+info:
+  title: SiteCRM Intelligence API
+  version: 0.1.0
+  description: |
+    Internal service for lead intelligence: Playwright-based website scraping,
+    OpenAI-powered scoring, and combined enrichment pipeline.
+
+    This API is called by the main SiteCRM server — it is not exposed directly
+    to the browser client.  Authentication is via the internal Docker network
+    in production; the `CORS_ORIGIN` environment variable restricts access.
+
+servers:
+  - url: http://intelligence.localhost
+    description: Local development (Traefik)
+  - url: http://localhost:3001
+    description: Direct local development
+
+tags:
+  - name: system
+    description: Health and operational endpoints
+  - name: intelligence
+    description: Lead scraping, scoring, and enrichment
+
+paths:
+  /health:
+    get:
+      operationId: getHealth
+      tags: [system]
+      summary: Liveness probe
+      description: |
+        Returns `200 { status: "ok" }` whenever the process is responsive.
+        Does not exercise external dependencies (OpenAI, Playwright).
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+
+  /v1/scrape:
+    post:
+      operationId: scrapeWebsite
+      tags: [intelligence]
+      summary: Scrape a prospect website
+      description: |
+        Navigates to the target URL with a headless Chromium browser and returns
+        structured metadata: page title, meta description, and a base-64 encoded
+        screenshot thumbnail.
+
+        Phase 5 will add tech-stack fingerprinting and structured data extraction
+        (Open Graph, JSON-LD schema.org).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ScrapeRequest'
+      responses:
+        '200':
+          description: Scraped page data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScrapeResponse'
+
+  /v1/score:
+    post:
+      operationId: scoreLead
+      tags: [intelligence]
+      summary: Score a lead with OpenAI
+      description: |
+        Evaluates the provided lead data (scraped or manual) and returns a
+        0–100 composite score, a letter grade, and a short scoring rationale.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ScoreRequest'
+      responses:
+        '200':
+          description: Lead score
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScoreResponse'
+
+  /v1/enrich:
+    post:
+      operationId: enrichLead
+      tags: [intelligence]
+      summary: Run the full enrichment pipeline
+      description: |
+        Runs scrape → score in sequence and returns a unified payload ready
+        to be persisted to the `leads` table by the main server.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EnrichRequest'
+      responses:
+        '200':
+          description: Enrichment result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EnrichResponse'
+
+components:
+  schemas:
+    HealthResponse:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          example: ok
+
+    ScrapeRequest:
+      type: object
+      required: [url]
+      additionalProperties: false
+      properties:
+        url:
+          type: string
+          format: uri
+          example: https://example.com
+
+    ScrapeResponse:
+      type: object
+      properties:
+        url:
+          type: string
+        title:
+          type: string
+        description:
+          type: string
+        screenshot:
+          type: string
+          description: Base-64 encoded PNG thumbnail
+
+    ScoreRequest:
+      type: object
+      required: [leadId, name]
+      additionalProperties: false
+      properties:
+        leadId:
+          type: string
+          format: uuid
+        name:
+          type: string
+        website:
+          type: string
+          format: uri
+        pageTitle:
+          type: string
+        pageDescription:
+          type: string
+        rating:
+          type: number
+          minimum: 0
+          maximum: 5
+        reviews:
+          type: integer
+          minimum: 0
+        businessType:
+          type: string
+
+    ScoreResponse:
+      type: object
+      properties:
+        leadId:
+          type: string
+          format: uuid
+        score:
+          type: number
+          description: 0–100 composite score
+        grade:
+          type: string
+          description: A / B / C / D / F
+        notes:
+          type: string
+          description: Short scoring rationale
+
+    EnrichRequest:
+      type: object
+      required: [leadId, name]
+      additionalProperties: false
+      properties:
+        leadId:
+          type: string
+          format: uuid
+        name:
+          type: string
+        website:
+          type: string
+          format: uri
+        businessType:
+          type: string
+
+    EnrichResponse:
+      type: object
+      properties:
+        leadId:
+          type: string
+          format: uuid
+        websiteScore:
+          type: number
+        websiteGrade:
+          type: string
+        websiteNotes:
+          type: string
+        score:
+          type: number

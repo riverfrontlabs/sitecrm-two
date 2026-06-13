@@ -1,0 +1,16 @@
+{
+  "name": "@sitecrm/types",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Shared TypeScript domain types for the SiteCRM monorepo — used by server, web, builder, and intelligence apps.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.0"
+  }
+}

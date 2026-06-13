@@ -6,7 +6,7 @@
  * - `ThemeProvider` — design-system theming; applies `data-theme` to <html>
  *   and persists the user's choice.
  */
-import { ThemeProvider } from '@sitetwo/design-system';
+import { ThemeProvider } from '@sitecrm/design-system';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';

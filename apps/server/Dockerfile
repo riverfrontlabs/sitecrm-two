@@ -1,4 +1,4 @@
-# Production image for @sitetwo/server.
+# Production image for @sitecrm/server.
 #
 # IMPORTANT: build with the REPO ROOT as context (the compose file does this),
 # because the server lives in an npm-workspaces monorepo and dependency
@@ -20,13 +20,18 @@ WORKDIR /repo
 COPY package.json package-lock.json ./
 COPY apps/server/package.json apps/server/
 COPY apps/web/package.json apps/web/
+COPY apps/builder/package.json apps/builder/
+COPY apps/intelligence/package.json apps/intelligence/
 COPY packages/design-system/package.json packages/design-system/
-RUN npm ci --workspace @sitetwo/server --include-workspace-root
+COPY packages/types/package.json packages/types/
+COPY packages/site-templates/package.json packages/site-templates/
+RUN npm ci --workspace @sitecrm/server --include-workspace-root
 
 COPY tsconfig.base.json ./
 COPY apps/server/tsconfig.json apps/server/
 COPY apps/server/src apps/server/src
-RUN npm run build --workspace @sitetwo/server
+COPY packages/types/src packages/types/src
+RUN npm run build --workspace @sitecrm/server
 
 # -------------------------------------------------------------- runtime ----
 FROM node:24-alpine AS runtime
@@ -36,8 +41,12 @@ WORKDIR /repo
 COPY package.json package-lock.json ./
 COPY apps/server/package.json apps/server/
 COPY apps/web/package.json apps/web/
+COPY apps/builder/package.json apps/builder/
+COPY apps/intelligence/package.json apps/intelligence/
 COPY packages/design-system/package.json packages/design-system/
-RUN npm ci --workspace @sitetwo/server --omit=dev
+COPY packages/types/package.json packages/types/
+COPY packages/site-templates/package.json packages/site-templates/
+RUN npm ci --workspace @sitecrm/server --omit=dev
 
 COPY --from=build /repo/apps/server/dist apps/server/dist
 # The spec is read at runtime and served at /docs; it lives next to dist/

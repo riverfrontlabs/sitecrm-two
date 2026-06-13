@@ -1,53 +1,161 @@
-# Local container stack: the REST API + its PostgreSQL database.
+# SiteCRM local development stack.
 #
-#   docker compose up --build      # API on :3001, Postgres on :5432
-#   docker compose up -d db        # database only — pair with `npm run dev`
-#                                  # and a DATABASE_URL in apps/server/.env
-#   docker compose down            # stop (add -v to also wipe the data volume)
+# Starts all four services behind a Traefik reverse proxy so each app is
+# reachable at a subdomain rather than a port number:
 #
-# The web app is not containerized: in development it runs under Vite
-# (`npm run dev:web`) and proxies /api/* to the API on port 3001 — which can
-# be either the container below or a locally running `npm run dev:api`.
+#   app.localhost      → apps/web      (CRM dashboard)
+#   api.localhost      → apps/server   (Fastify API)
+#   builder.localhost  → apps/builder  (AI site builder)
+#   intelligence.localhost → apps/intelligence
+#   localhost:8080     → Traefik dashboard (dev only)
 #
-# Credentials below are intentionally simple defaults for LOCAL DEVELOPMENT
-# ONLY; override them with environment variables for anything shared.
+# Quick-start:
+#   docker compose up --build        # full stack with hot-reload volumes
+#   docker compose up -d db          # database only — use npm run dev locally
+#   docker compose down              # stop (add -v to also wipe the data volume)
+#
+# Credentials are intentionally simple defaults for LOCAL DEVELOPMENT ONLY.
+# Override them via a root .env file or real environment variables.
 
-name: sitetwo-oh
+name: sitecrm
 
 services:
+  # ── Reverse proxy ───────────────────────────────────────────────────────────
+  traefik:
+    image: traefik:v3.3
+    container_name: sitecrm-traefik
+    command:
+      - '--api.dashboard=true'
+      - '--api.insecure=true'
+      - '--providers.docker=true'
+      - '--providers.docker.exposedbydefault=false'
+      - '--entrypoints.web.address=:80'
+    ports:
+      - '80:80'
+      - '8080:8080'
+    volumes:
+      - '/var/run/docker.sock:/var/run/docker.sock:ro'
+    networks:
+      - web
+
+  # ── Database ────────────────────────────────────────────────────────────────
   db:
     image: postgres:17-alpine
+    container_name: sitecrm-db
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-sitetwo}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-sitetwo}
-      POSTGRES_DB: ${POSTGRES_DB:-sitetwo}
+      POSTGRES_USER: ${POSTGRES_USER:-sitecrm}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-sitecrm}
+      POSTGRES_DB: ${POSTGRES_DB:-sitecrm}
     ports:
+      # Expose on host so `npm run dev:api` (outside Docker) can connect directly.
       - '5432:5432'
     volumes:
-      # Named volume so data survives `docker compose down` (without -v).
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      # Gate the API's startup on Postgres actually accepting connections,
-      # not just the container existing.
-      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-sitetwo} -d ${POSTGRES_DB:-sitetwo}']
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-sitecrm} -d ${POSTGRES_DB:-sitecrm}']
       interval: 5s
       timeout: 3s
       retries: 10
+    networks:
+      - internal
 
+  # ── API server ──────────────────────────────────────────────────────────────
   api:
     build:
-      # Repo root as context: the monorepo's root lockfile drives the install.
       context: .
       dockerfile: apps/server/Dockerfile
+    container_name: sitecrm-api
     environment:
-      # "db" resolves via the compose network; the API applies its schema and
-      # seeds an empty database on startup (see postgres-project-store.ts).
-      DATABASE_URL: postgres://${POSTGRES_USER:-sitetwo}:${POSTGRES_PASSWORD:-sitetwo}@db:5432/${POSTGRES_DB:-sitetwo}
-    ports:
-      - '3001:3001'
+      DATABASE_URL: postgres://${POSTGRES_USER:-sitecrm}:${POSTGRES_PASSWORD:-sitecrm}@db:5432/${POSTGRES_DB:-sitecrm}
+      JWT_SECRET: ${JWT_SECRET:-change-me-in-production}
+      INTELLIGENCE_API_URL: http://sitecrm-intelligence:3001
+      HOST: 0.0.0.0
+      PORT: 3000
     depends_on:
       db:
         condition: service_healthy
+    volumes:
+      # Hot-reload: mount src so tsx watch picks up changes without rebuilding.
+      - ./apps/server/src:/repo/apps/server/src
+      - ./packages/types/src:/repo/packages/types/src
+    command: >
+      sh -c "npm run db:migrate -w @sitecrm/server && npm run dev -w @sitecrm/server"
+    labels:
+      - 'traefik.enable=true'
+      - 'traefik.http.routers.api.rule=Host(`api.localhost`)'
+      - 'traefik.http.routers.api.entrypoints=web'
+      - 'traefik.http.services.api.loadbalancer.server.port=3000'
+    networks:
+      - web
+      - internal
+
+  # ── CRM web dashboard ───────────────────────────────────────────────────────
+  web:
+    build:
+      context: .
+      dockerfile: apps/server/Dockerfile
+    container_name: sitecrm-web
+    depends_on:
+      - api
+    volumes:
+      - ./apps/web/src:/repo/apps/web/src
+    command: npm run dev -w @sitecrm/web -- --host
+    labels:
+      - 'traefik.enable=true'
+      - 'traefik.http.routers.web.rule=Host(`app.localhost`)'
+      - 'traefik.http.routers.web.entrypoints=web'
+      - 'traefik.http.services.web.loadbalancer.server.port=5173'
+    networks:
+      - web
+      - internal
+
+  # ── AI site builder ─────────────────────────────────────────────────────────
+  builder:
+    build:
+      context: .
+      dockerfile: apps/server/Dockerfile
+    container_name: sitecrm-builder
+    depends_on:
+      - api
+    volumes:
+      - ./apps/builder/src:/repo/apps/builder/src
+    command: npm run dev -w @sitecrm/builder -- --host
+    labels:
+      - 'traefik.enable=true'
+      - 'traefik.http.routers.builder.rule=Host(`builder.localhost`)'
+      - 'traefik.http.routers.builder.entrypoints=web'
+      - 'traefik.http.services.builder.loadbalancer.server.port=5174'
+    networks:
+      - web
+      - internal
+
+  # ── Intelligence API ────────────────────────────────────────────────────────
+  intelligence:
+    build:
+      context: .
+      dockerfile: apps/intelligence/Dockerfile
+    container_name: sitecrm-intelligence
+    environment:
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      HOST: 0.0.0.0
+      PORT: 3001
+    volumes:
+      - ./apps/intelligence/src:/repo/apps/intelligence/src
+    command: npm run dev -w @sitecrm/intelligence
+    labels:
+      - 'traefik.enable=true'
+      - 'traefik.http.routers.intelligence.rule=Host(`intelligence.localhost`)'
+      - 'traefik.http.routers.intelligence.entrypoints=web'
+      - 'traefik.http.services.intelligence.loadbalancer.server.port=3001'
+    networks:
+      - web
+      - internal
+
+networks:
+  web:
+    driver: bridge
+  internal:
+    driver: bridge
 
 volumes:
   pgdata:

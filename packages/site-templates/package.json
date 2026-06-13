@@ -1,0 +1,19 @@
+{
+  "name": "@sitecrm/site-templates",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Template catalog and site-spec type definitions for the AI site builder.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@sitecrm/types": "*"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.0"
+  }
+}

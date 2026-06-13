@@ -2,23 +2,28 @@
   "name": "@riverfront-labs/sitecrm",
   "version": "0.1.0",
   "private": true,
-  "description": "Full-stack TypeScript application: React + Tailwind frontend, Fastify REST API, and a themeable design system.",
+  "description": "SiteCRM — AI-powered site builder, lead CRM with Meta DM outreach, and AWS hosting dashboard.",
   "type": "module",
   "workspaces": [
     "apps/*",
     "packages/*"
   ],
   "scripts": {
-    "dev": "concurrently -n web,api -c cyan,magenta \"npm:dev:web\" \"npm:dev:api\"",
-    "dev:web": "npm run dev -w @sitetwo/web",
-    "dev:api": "npm run dev -w @sitetwo/server",
+    "dev": "concurrently -n web,api,builder,intel -c cyan,magenta,blue,yellow \"npm:dev:web\" \"npm:dev:api\" \"npm:dev:builder\" \"npm:dev:intelligence\"",
+    "dev:web": "npm run dev -w @sitecrm/web",
+    "dev:api": "npm run dev -w @sitecrm/server",
+    "dev:builder": "npm run dev -w @sitecrm/builder",
+    "dev:intelligence": "npm run dev -w @sitecrm/intelligence",
     "build": "npm run build -ws --if-present",
     "test": "npm run test -ws --if-present",
     "typecheck": "npm run typecheck -ws --if-present",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "db:generate": "npm run db:generate -w @sitecrm/server",
+    "db:migrate": "npm run db:migrate -w @sitecrm/server",
+    "db:studio": "npm run db:studio -w @sitecrm/server"
   },
   "devDependencies": {
     "@eslint/js": "^9.0.0",

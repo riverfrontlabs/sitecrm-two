@@ -1,59 +1,43 @@
 /**
- * Production/development entry point.
+ * Production/development entry point for the SiteCRM API.
  *
- * Builds the app via {@link buildApp} and binds it to a port. All wiring
- * lives in `app.ts` so tests can construct the identical application
- * without opening a socket.
+ * Loads environment variables, selects a database driver, builds the app via
+ * {@link buildApp}, and binds it to a port.  All wiring lives in `app.ts` so
+ * tests can construct the identical application without opening a socket.
  *
- * Storage backend selection:
- * - `DATABASE_URL` set   → {@link PostgresProjectStore} (persistent).
- *   This is how the API runs under `docker compose up`, and how local dev
- *   connects to the compose-managed Postgres container.
- * - `DATABASE_URL` unset → {@link MemoryProjectStore} (reseeded each start).
+ * Database driver selection (via {@link createDb}):
+ * - `DATABASE_URL` contains `neon.tech` → Neon serverless driver (WebSockets)
+ * - Otherwise                           → standard pg connection pool
  *
- * Environment variables (see `.env.example`; a local `.env` file in this
- * package is loaded automatically when present):
- * - `DATABASE_URL` — Postgres connection string (optional, see above)
- * - `PORT` — listen port (default `3001`)
- * - `HOST` — bind address (default `127.0.0.1`; containers set `0.0.0.0`)
+ * Environment variables (see `.env.example`):
+ * - `DATABASE_URL` — Postgres connection string (required for database routes)
+ * - `JWT_SECRET`   — JWT signing secret (required; warns if missing)
+ * - `PORT`         — listen port (default `3000`)
+ * - `HOST`         — bind address (default `127.0.0.1`; containers set `0.0.0.0`)
  */
 import { buildApp } from './app.js';
-import { MemoryProjectStore } from './store/memory-project-store.js';
-import { PostgresProjectStore } from './store/postgres-project-store.js';
-import type { ProjectStore } from './store/project-store.js';
+import { createDb } from './db/index.js';
 
 try {
   // Node's built-in dotenv (21.7+): loads ./.env relative to the working
-  // directory. Optional by design — absence simply means "use defaults".
+  // directory. Optional by design — absence simply means "use actual env".
   process.loadEnvFile();
 } catch {
   // No .env file present; environment comes from the actual environment.
 }
 
-const PORT = Number(process.env.PORT ?? 3001);
+const PORT = Number(process.env.PORT ?? 3000);
 const HOST = process.env.HOST ?? '127.0.0.1';
 const DATABASE_URL = process.env.DATABASE_URL;
+const JWT_SECRET = process.env.JWT_SECRET;
 
-/** Builds the storage backend dictated by the environment (see module JSDoc). */
-async function createStore(): Promise<ProjectStore> {
-  if (DATABASE_URL) {
-    const store = new PostgresProjectStore(DATABASE_URL);
-    await store.init();
-    return store;
-  }
-  return new MemoryProjectStore();
+if (!JWT_SECRET) {
+  console.warn('[server] JWT_SECRET is not set — using an insecure fallback. Set it in .env.');
 }
 
-const store = await createStore();
-const app = await buildApp({ logger: true, store });
+const db = DATABASE_URL ? await createDb(DATABASE_URL) : undefined;
+const app = await buildApp({ logger: true, db, jwtSecret: JWT_SECRET });
 
-// Dispose the store (close the pg pool) whenever Fastify shuts down.
-app.addHook('onClose', async () => {
-  await store.dispose?.();
-});
-
-// Docker (and most process managers) stop containers with SIGTERM; close
-// gracefully so in-flight requests finish and the pool drains.
 for (const signal of ['SIGINT', 'SIGTERM'] as const) {
   process.once(signal, () => {
     app.log.info({ signal }, 'shutting down');
@@ -63,8 +47,8 @@ for (const signal of ['SIGINT', 'SIGTERM'] as const) {
 
 try {
   await app.listen({ port: PORT, host: HOST });
-  app.log.info(`storage: ${DATABASE_URL ? 'postgres' : 'in-memory'}`);
-  app.log.info(`API docs available at http://${HOST}:${PORT}/docs`);
+  app.log.info(`storage: ${DATABASE_URL ? 'postgres' : 'none (DATABASE_URL not set)'}`);
+  app.log.info(`API docs at http://${HOST}:${PORT}/docs`);
 } catch (err) {
   app.log.error(err);
   process.exit(1);

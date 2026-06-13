@@ -1,8 +1,8 @@
 {
-  "name": "@sitecrm/web",
+  "name": "@sitecrm/builder",
   "version": "0.1.0",
   "private": true,
-  "description": "SiteCRM main dashboard — lead pipeline, outreach, notifications, and AWS hosting management.",
+  "description": "AI-assisted site/app builder UI. Prompt-driven generation with a split-pane live preview.",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -15,6 +15,7 @@
   "dependencies": {
     "@sitecrm/design-system": "*",
     "@sitecrm/types": "*",
+    "@sitecrm/site-templates": "*",
     "@tanstack/react-query": "^5.0.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",

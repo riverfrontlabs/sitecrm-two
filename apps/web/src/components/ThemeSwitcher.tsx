@@ -1,4 +1,4 @@
-import { isThemeName, THEMES, useTheme } from '@sitetwo/design-system';
+import { isThemeName, THEMES, useTheme } from '@sitecrm/design-system';
 
 /**
  * Global theme picker shown in the app header.

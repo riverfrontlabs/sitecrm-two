@@ -12,7 +12,7 @@
  *    reference live, so utilities follow the active theme at runtime.
  */
 @import 'tailwindcss';
-@import '@sitetwo/design-system/tokens.css';
+@import '@sitecrm/design-system/tokens.css';
 @source '../../../packages/design-system/src';
 
 @theme inline {
