@@ -1,7 +1,6 @@
-# The backend: the Fastify API as an ECS Fargate service.
+# The backend: the Fastify API and Intelligence API as ECS Fargate services.
 #
-# Image flow: `docker build` from the repo root (same Dockerfile docker
-# compose uses) → push to the ECR repository below → ECS pulls it.
+# Image flow: `docker build` from the repo root → push to ECR → ECS pulls it.
 # Service discovery: tasks register in a Cloud Map private DNS namespace;
 # API Gateway's VPC link resolves them directly (see api-gateway.tf), which
 # avoids paying for a load balancer in this single-service setup. With more
@@ -10,8 +9,17 @@
 # ----------------------------------------------------------------- ECR ----
 
 resource "aws_ecr_repository" "api" {
-  name = "${local.name}-api"
-  # Dev convenience: allow `terraform destroy` even with images present.
+  name         = "${local.name}-api"
+  force_delete = true # dev convenience: allow destroy with images present
+
+  image_scanning_configuration {
+    scan_on_push = true
+  }
+}
+
+# Intelligence API runs the Playwright Dockerfile (mcr.microsoft.com/playwright base).
+resource "aws_ecr_repository" "intelligence" {
+  name         = "${local.name}-intelligence"
   force_delete = true
 
   image_scanning_configuration {
@@ -19,9 +27,26 @@ resource "aws_ecr_repository" "api" {
   }
 }
 
-# Keep the repository from accumulating every image ever pushed.
+# Keep both repositories from accumulating every image ever pushed.
 resource "aws_ecr_lifecycle_policy" "api" {
   repository = aws_ecr_repository.api.name
+
+  policy = jsonencode({
+    rules = [{
+      rulePriority = 1
+      description  = "Keep only the 10 most recent images"
+      selection = {
+        tagStatus   = "any"
+        countType   = "imageCountMoreThan"
+        countNumber = 10
+      }
+      action = { type = "expire" }
+    }]
+  })
+}
+
+resource "aws_ecr_lifecycle_policy" "intelligence" {
+  repository = aws_ecr_repository.intelligence.name
 
   policy = jsonencode({
     rules = [{
@@ -65,7 +90,7 @@ resource "aws_service_discovery_service" "api" {
 # ------------------------------------------------------------------ IAM ----
 
 # Execution role: what the ECS *agent* needs before the container starts —
-# pull from ECR, write logs, and read the DATABASE_URL secret.
+# pull from ECR, write logs, and read DATABASE_URL + JWT_SECRET from Secrets Manager.
 resource "aws_iam_role" "task_execution" {
   name = "${local.name}-task-execution"
 
@@ -84,16 +109,19 @@ resource "aws_iam_role_policy_attachment" "task_execution" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
 }
 
-resource "aws_iam_role_policy" "read_database_url" {
-  name = "read-database-url"
+resource "aws_iam_role_policy" "read_secrets" {
+  name = "read-secrets"
   role = aws_iam_role.task_execution.id
 
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
-      Effect   = "Allow"
-      Action   = "secretsmanager:GetSecretValue"
-      Resource = aws_secretsmanager_secret.database_url.arn
+      Effect = "Allow"
+      Action = "secretsmanager:GetSecretValue"
+      Resource = [
+        aws_secretsmanager_secret.database_url.arn,
+        aws_secretsmanager_secret.jwt_secret.arn,
+      ]
     }]
   })
 }
@@ -149,25 +177,36 @@ resource "aws_ecs_task_definition" "api" {
       image     = "${aws_ecr_repository.api.repository_url}:${var.api_image_tag}"
       essential = true
 
-      portMappings = [{ containerPort = 3001, protocol = "tcp" }]
+      portMappings = [{ containerPort = 3000, protocol = "tcp" }]
 
-      # HOST/PORT have the right defaults baked into the image (0.0.0.0:3001);
-      # DATABASE_URL arrives from Secrets Manager and selects the Postgres
-      # store, exactly as it does under docker compose.
+      # HOST/PORT defaults are baked into the image (0.0.0.0:3000).
+      # DATABASE_URL and JWT_SECRET arrive from Secrets Manager at task start,
+      # mirroring the local .env setup under docker compose.
       secrets = [
         {
           name      = "DATABASE_URL"
           valueFrom = aws_secretsmanager_secret.database_url.arn
-        }
+        },
+        {
+          name      = "JWT_SECRET"
+          valueFrom = aws_secretsmanager_secret.jwt_secret.arn
+        },
+      ]
+
+      environment = [
+        {
+          name  = "INTELLIGENCE_API_URL"
+          value = "http://intelligence.${local.name}.local:3001"
+        },
       ]
 
       healthCheck = {
         # busybox wget ships in the alpine base image.
-        command     = ["CMD-SHELL", "wget -qO- http://localhost:3001/api/health || exit 1"]
+        command     = ["CMD-SHELL", "wget -qO- http://localhost:3000/api/health || exit 1"]
         interval    = 30
         timeout     = 5
         retries     = 3
-        startPeriod = 10
+        startPeriod = 15 # extra window for db:migrate to complete on first start
       }
 
       logConfiguration = {
@@ -199,7 +238,7 @@ resource "aws_ecs_service" "api" {
 
   service_registries {
     registry_arn = aws_service_discovery_service.api.arn
-    port         = 3001
+    port         = 3000
   }
 
   # Roll tasks when the task definition changes; wait for steady state so a

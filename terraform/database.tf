@@ -1,9 +1,9 @@
 # PostgreSQL on RDS.
 #
-# The server's PostgresProjectStore applies its own schema on startup, so the
-# database needs no provisioning beyond existing. The full connection URL is
-# stored in Secrets Manager and injected into the ECS task as DATABASE_URL —
-# the same variable the server uses locally and under docker compose.
+# Drizzle migrations (`db:migrate`) run inside the ECS task on startup, so the
+# database only needs to exist. The full connection URL is stored in Secrets
+# Manager and injected as DATABASE_URL. JWT_SECRET gets its own secret entry so
+# both can be rotated independently.
 #
 # Dev-grade settings flagged inline; revisit each before calling this "prod".
 
@@ -68,4 +68,16 @@ resource "aws_secretsmanager_secret_version" "database_url" {
     aws_db_instance.main.endpoint, # host:port
     var.db_name,
   )
+}
+
+# JWT signing secret — kept separate from DATABASE_URL so it can be rotated
+# independently. Set via TF_VAR_jwt_secret; see variables.tf for details.
+resource "aws_secretsmanager_secret" "jwt_secret" {
+  name                    = "${local.name}/jwt-secret"
+  recovery_window_in_days = 0 # dev convenience; remove for production
+}
+
+resource "aws_secretsmanager_secret_version" "jwt_secret" {
+  secret_id     = aws_secretsmanager_secret.jwt_secret.id
+  secret_string = var.jwt_secret
 }

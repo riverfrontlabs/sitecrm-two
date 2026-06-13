@@ -84,8 +84,8 @@ resource "aws_security_group" "vpc_link" {
 
   egress {
     description = "Forward requests to the API tasks"
-    from_port   = 3001
-    to_port     = 3001
+    from_port   = 3000
+    to_port     = 3000
     protocol    = "tcp"
     cidr_blocks = [aws_vpc.main.cidr_block]
   }
@@ -100,8 +100,8 @@ resource "aws_security_group" "api" {
 
   ingress {
     description     = "HTTP from the API Gateway VPC link only"
-    from_port       = 3001
-    to_port         = 3001
+    from_port       = 3000
+    to_port         = 3000
     protocol        = "tcp"
     security_groups = [aws_security_group.vpc_link.id]
   }

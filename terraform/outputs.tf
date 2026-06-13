@@ -15,6 +15,11 @@ output "ecr_repository_url" {
   value       = aws_ecr_repository.api.repository_url
 }
 
+output "ecr_intelligence_repository_url" {
+  description = "Push the Intelligence API image here (Playwright-based Dockerfile)."
+  value       = aws_ecr_repository.intelligence.repository_url
+}
+
 output "web_bucket" {
   description = "S3 bucket for the built web app (`aws s3 sync apps/web/dist s3://<this>`)."
   value       = aws_s3_bucket.web.bucket

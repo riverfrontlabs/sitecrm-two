@@ -60,7 +60,7 @@ sitecrm-two/
 - [x] Define initial DB schemas: users, leads, sites, deployments, notifications
 - [x] Implement JWT auth (register, login, refresh, middleware)
 - [x] Set up Traefik in `docker-compose.yml` for all four services
-- [ ] Update Terraform modules: static site (S3+CloudFront) and server app (ECS+RDS) variants
+- [x] Update Terraform modules: static site (S3+CloudFront) and server app (ECS+RDS) variants
 
 ---
 

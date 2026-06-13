@@ -3,7 +3,7 @@
 
 # aws_region    = "us-east-1"
 # environment   = "dev"
-# project_name  = "sitetwo-oh"
+# project_name  = "sitecrm"
 
 # API image tag to deploy from ECR (see README.md for the push workflow).
 # api_image_tag     = "latest"
@@ -12,3 +12,7 @@
 # Database sizing.
 # db_instance_class    = "db.t4g.micro"
 # db_allocated_storage = 20
+
+# JWT secret — NEVER put a real value here; pass via environment variable:
+#   export TF_VAR_jwt_secret=$(openssl rand -hex 32)
+# jwt_secret = ""

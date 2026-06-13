@@ -4,7 +4,7 @@
 variable "project_name" {
   description = "Name prefix for every resource (lowercase, hyphenated)."
   type        = string
-  default     = "sitetwo-oh"
+  default     = "sitecrm"
 }
 
 variable "environment" {
@@ -66,11 +66,26 @@ variable "db_allocated_storage" {
 variable "db_name" {
   description = "Name of the PostgreSQL database."
   type        = string
-  default     = "sitetwo"
+  default     = "sitecrm"
 }
 
 variable "db_username" {
   description = "Master username for PostgreSQL."
   type        = string
-  default     = "sitetwo"
+  default     = "sitecrm"
+}
+
+# ------------------------------------------------------------- secrets ----
+
+variable "jwt_secret" {
+  description = <<-EOT
+    JWT signing secret for the SiteCRM API.  Never put a real value here or
+    in terraform.tfvars — pass it via the environment instead:
+      export TF_VAR_jwt_secret=$(openssl rand -hex 32)
+    An empty string causes the API to fall back to its insecure dev default
+    and log a warning on startup.
+  EOT
+  type      = string
+  sensitive = true
+  default   = ""
 }
