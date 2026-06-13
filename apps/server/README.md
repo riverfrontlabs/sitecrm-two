@@ -1,6 +1,6 @@
-# @sitetwo/server
+# @sitecrm/server
 
-The REST API for sitetwo-oh: Node.js + TypeScript + [Fastify](https://fastify.dev).
+The REST API for sitecrm-two: Node.js + TypeScript + [Fastify](https://fastify.dev).
 
 ## API documentation
 
@@ -11,9 +11,9 @@ With the server running (`npm run dev:api` at the repo root):
 
 | URL                               | What you get                                 |
 | --------------------------------- | -------------------------------------------- |
-| <http://localhost:3001/docs>      | Interactive Swagger UI ("try it out" works). |
-| <http://localhost:3001/docs/yaml> | The raw YAML spec (for codegen/clients).     |
-| <http://localhost:3001/docs/json> | The spec as JSON.                            |
+| <http://localhost:3000/docs>      | Interactive Swagger UI ("try it out" works). |
+| <http://localhost:3000/docs/yaml> | The raw YAML spec (for codegen/clients).     |
+| <http://localhost:3000/docs/json> | The spec as JSON.                            |
 
 The Fastify route schemas in `src/routes/` and the web client types in
 `apps/web/src/api/client.ts` mirror the spec. **When changing an endpoint,
@@ -56,7 +56,7 @@ npm run dev:api                              # auto-loads the .env file
 Postgres-backed integration tests are opt-in (they need a real database):
 
 ```bash
-TEST_DATABASE_URL=postgres://sitetwo:sitetwo@localhost:5432/sitetwo npm test -w @sitetwo/server
+TEST_DATABASE_URL=postgres://sitecrm:sitecrm@localhost:5432/sitecrm npm test -w @sitecrm/server
 ```
 
 ## Docker
@@ -67,7 +67,7 @@ must be built **from the repo root** because dependency install is driven by
 the monorepo's root lockfile — the compose file already does this:
 
 ```bash
-docker compose up --build    # API on :3001 + Postgres on :5432
+docker compose up --build    # API on :3000 + Postgres on :5432
 docker compose down          # stop; add -v to also wipe the database volume
 ```
 
@@ -102,11 +102,11 @@ schemas strip any property not declared in the spec.
 
 | Command (from repo root)               | What it does                                    |
 | -------------------------------------- | ----------------------------------------------- |
-| `npm run dev:api`                      | Start with hot reload (tsx watch) on port 3001. |
-| `npm test -w @sitetwo/server`          | Run the Vitest integration suite.               |
-| `npm run build -w @sitetwo/server`     | Compile to `dist/` with tsc.                    |
-| `npm run start -w @sitetwo/server`     | Run the compiled build.                         |
-| `npm run typecheck -w @sitetwo/server` | Strict type check, no emit.                     |
+| `npm run dev:api`                      | Start with hot reload (tsx watch) on port 3000. |
+| `npm test -w @sitecrm/server`          | Run the Vitest integration suite.               |
+| `npm run build -w @sitecrm/server`     | Compile to `dist/` with tsc.                    |
+| `npm run start -w @sitecrm/server`     | Run the compiled build.                         |
+| `npm run typecheck -w @sitecrm/server` | Strict type check, no emit.                     |
 
 ## Configuration
 
@@ -116,7 +116,7 @@ A `.env` file in this package is loaded automatically when present — copy
 | Variable       | Default     | Purpose                                                |
 | -------------- | ----------- | ------------------------------------------------------ |
 | `DATABASE_URL` | _(unset)_   | Postgres connection string; unset = in-memory storage. |
-| `PORT`         | `3001`      | Listen port.                                           |
+| `PORT`         | `3000`      | Listen port.                                           |
 | `HOST`         | `127.0.0.1` | Bind address (the Docker image sets `0.0.0.0`).        |
 
 ## Conventions

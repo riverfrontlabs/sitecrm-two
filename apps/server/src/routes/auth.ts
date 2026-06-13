@@ -178,8 +178,7 @@ export const authRoutes: FastifyPluginAsync<AuthRoutesOptions> = async (app, opt
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       if (!db) return (reply as any).status(503).send({ statusCode: 503, error: 'Service Unavailable', message: 'Database not configured' });
 
-      const payload = request.user as { sub: string };
-      const [user] = await db.select().from(users).where(eq(users.id, payload.sub)).limit(1);
+      const [user] = await db.select().from(users).where(eq(users.id, request.user.sub)).limit(1);
       if (!user) return reply.status(401).send({ statusCode: 401, error: 'Unauthorized', message: 'User not found' });
 
       return reply.send({

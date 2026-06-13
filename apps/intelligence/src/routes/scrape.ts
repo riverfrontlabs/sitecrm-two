@@ -1,4 +1,5 @@
 import type { FastifyPluginAsync } from 'fastify';
+import { UnsafeUrlError, assertSafeScrapeUrl } from '../lib/url-guard.js';
 
 /**
  * Scrape request body — the URL to analyse.
@@ -46,6 +47,16 @@ export const scrapeRoutes: FastifyPluginAsync = async (app) => {
             },
           },
         },
+      },
+      // SSRF guard runs before the handler so a private/internal target is
+      // rejected with a 400 and never reaches the Phase-5 Playwright navigation.
+      preHandler: async (request, reply) => {
+        try {
+          await assertSafeScrapeUrl(request.body.url);
+        } catch (err) {
+          const message = err instanceof UnsafeUrlError ? err.message : 'Invalid URL.';
+          return reply.status(400).send({ statusCode: 400, error: 'Bad Request', message });
+        }
       },
     },
     async (request) => {

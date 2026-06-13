@@ -88,11 +88,11 @@ resource "aws_security_group" "app" {
   vpc_id      = var.vpc_id
 
   ingress {
-    description = "App port (from within VPC)"
+    description = "App port (from within this VPC only)"
     from_port   = var.container_port
     to_port     = var.container_port
     protocol    = "tcp"
-    cidr_blocks = ["10.0.0.0/8"]
+    cidr_blocks = [var.vpc_cidr]
   }
 
   egress {
@@ -142,9 +142,10 @@ resource "aws_db_instance" "app" {
   count      = var.create_database ? 1 : 0
   identifier = "${local.name}-db"
 
-  engine         = "postgres"
-  engine_version = "17"
-  instance_class = var.db_instance_class
+  engine                     = "postgres"
+  engine_version             = "17.4"
+  auto_minor_version_upgrade = false
+  instance_class             = var.db_instance_class
 
   allocated_storage = var.db_allocated_storage
   storage_type      = "gp3"

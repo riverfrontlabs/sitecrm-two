@@ -14,20 +14,25 @@
  */
 import {
   boolean,
+  date,
   integer,
-  json,
+  jsonb,
   pgTable,
   real,
   text,
   timestamp,
+  unique,
   uuid,
   varchar,
+  type AnyPgColumn,
 } from 'drizzle-orm/pg-core';
 
 import type {
   BuildStatus,
+  ContactDirection,
   ContactEventType,
   DeploymentStatus,
+  IntelligenceTask,
   JobStatus,
   LeadStatus,
   MetaAccountType,
@@ -75,8 +80,12 @@ export const leads = pgTable('leads', {
   /** Composite intelligence score (0–100). */
   score: real('score').default(0),
   placeId: varchar('place_id', { length: 255 }),
-  /** FK to a generated site in the `sites` table. */
-  linkedSiteId: uuid('linked_site_id'),
+  /**
+   * FK to a generated site in the `sites` table. Nullable, `set null` on delete.
+   * The return type is annotated `AnyPgColumn` because `leads` and `sites`
+   * reference each other — without it TypeScript hits a circular inference error.
+   */
+  linkedSiteId: uuid('linked_site_id').references((): AnyPgColumn => sites.id, { onDelete: 'set null' }),
   status: varchar('status', { length: 50 }).$type<LeadStatus>().default('new').notNull(),
   shortlisted: boolean('shortlisted').default(false).notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
@@ -110,7 +119,7 @@ export const contactEvents = pgTable('contact_events', {
   type: varchar('type', { length: 100 }).$type<ContactEventType>().notNull(),
   channel: varchar('channel', { length: 50 }).$type<OutreachChannel>().notNull(),
   /** `sent` = we initiated; `received` = lead replied. */
-  direction: varchar('direction', { length: 10 }).notNull(),
+  direction: varchar('direction', { length: 10 }).$type<ContactDirection>().notNull(),
   detail: text('detail'),
   /** Meta message ID or email provider message ID for deduplication. */
   externalId: varchar('external_id', { length: 512 }),
@@ -161,7 +170,7 @@ export const notifications = pgTable('notifications', {
   title: varchar('title', { length: 255 }).notNull(),
   body: text('body').notNull(),
   /** Arbitrary JSON payload for deep-link navigation (e.g. `{ leadId: "…" }`). */
-  data: json('data').$type<Record<string, unknown>>(),
+  data: jsonb('data').$type<Record<string, unknown>>(),
   read: boolean('read').default(false).notNull(),
   readAt: timestamp('read_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
@@ -184,7 +193,7 @@ export const sites = pgTable('sites', {
   leadId: uuid('lead_id').references(() => leads.id, { onDelete: 'set null' }),
   name: varchar('name', { length: 255 }).notNull(),
   type: varchar('type', { length: 50 }).$type<SiteType>().notNull(),
-  spec: json('spec').$type<SiteSpec>().notNull(),
+  spec: jsonb('spec').$type<SiteSpec>().notNull(),
   buildStatus: varchar('build_status', { length: 50 })
     .$type<BuildStatus>()
     .default('draft')
@@ -260,10 +269,10 @@ export const jobs = pgTable('jobs', {
     .notNull()
     .references(() => users.id, { onDelete: 'cascade' }),
   status: varchar('status', { length: 50 }).$type<JobStatus>().default('pending').notNull(),
-  businessTypes: json('business_types').$type<string[]>().notNull().default([]),
-  locations: json('locations').$type<string[]>().notNull().default([]),
-  enabledTasks: json('enabled_tasks')
-    .$type<string[]>()
+  businessTypes: jsonb('business_types').$type<string[]>().notNull().default([]),
+  locations: jsonb('locations').$type<string[]>().notNull().default([]),
+  enabledTasks: jsonb('enabled_tasks')
+    .$type<IntelligenceTask[]>()
     .notNull()
     .default(['enrich', 'score', 'generate']),
   totalFound: integer('total_found').default(0).notNull(),
@@ -276,18 +285,28 @@ export const jobs = pgTable('jobs', {
 
 // ── Daily Snapshots ───────────────────────────────────────────────────────────
 
-/** Daily pipeline funnel metrics per user — used by the CRM analytics dashboard. */
-export const dailySnapshots = pgTable('daily_snapshots', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  userId: uuid('user_id')
-    .notNull()
-    .references(() => users.id, { onDelete: 'cascade' }),
-  date: timestamp('date', { withTimezone: true }).defaultNow().notNull(),
-  total: integer('total').default(0).notNull(),
-  contacted: integer('contacted').default(0).notNull(),
-  replied: integer('replied').default(0).notNull(),
-  qualified: integer('qualified').default(0).notNull(),
-  proposal: integer('proposal').default(0).notNull(),
-  won: integer('won').default(0).notNull(),
-  lost: integer('lost').default(0).notNull(),
-});
+/**
+ * Daily pipeline funnel metrics per user — used by the CRM analytics dashboard.
+ *
+ * Keyed by calendar `date` (not a timestamp) with a unique `(user_id, date)`
+ * constraint so there is exactly one snapshot row per user per day; the daily
+ * job can upsert idempotently.
+ */
+export const dailySnapshots = pgTable(
+  'daily_snapshots',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    date: date('date').defaultNow().notNull(),
+    total: integer('total').default(0).notNull(),
+    contacted: integer('contacted').default(0).notNull(),
+    replied: integer('replied').default(0).notNull(),
+    qualified: integer('qualified').default(0).notNull(),
+    proposal: integer('proposal').default(0).notNull(),
+    won: integer('won').default(0).notNull(),
+    lost: integer('lost').default(0).notNull(),
+  },
+  (table) => [unique('daily_snapshots_user_date_unq').on(table.userId, table.date)],
+);

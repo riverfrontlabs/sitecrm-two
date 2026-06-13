@@ -19,6 +19,16 @@ info:
     **Authentication:** Most endpoints require a Bearer JWT.  Obtain a token
     via `POST /api/auth/login` or `POST /api/auth/register` and pass it as
     `Authorization: Bearer <token>` on subsequent requests.
+
+    **Common error responses (apply to every operation unless noted):**
+    - `400 Bad Request` — request body or query failed validation
+      (`additionalProperties: false` rejects unknown fields).
+    - `401 Unauthorized` — missing, invalid, or expired token on a protected route.
+    - `503 Service Unavailable` — the database is not configured/reachable.
+
+    All errors use the shared `Error` schema. Reusable definitions are under
+    `components/responses` (`BadRequest`, `Unauthorized`, `NotFound`,
+    `ServiceUnavailable`).
   contact:
     name: Riverfront Labs
 
@@ -493,6 +503,35 @@ components:
       scheme: bearer
       bearerFormat: JWT
 
+  # Reusable error responses — reference from operations via
+  # `$ref: '#/components/responses/<Name>'`. See the info description for when
+  # each applies across the API.
+  responses:
+    BadRequest:
+      description: Request failed validation
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Unauthorized:
+      description: Missing, invalid, or expired token
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    ServiceUnavailable:
+      description: Database not configured or unreachable
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
   schemas:
     # ── System ──────────────────────────────────────────────────────────────
 
@@ -570,7 +609,7 @@ components:
       properties:
         token:
           type: string
-          description: Signed JWT — include as `Authorization: Bearer <token>`
+          description: 'Signed JWT — include as `Authorization: Bearer <token>`'
         user:
           $ref: '#/components/schemas/User'
 

@@ -24,9 +24,13 @@ resource "aws_db_subnet_group" "main" {
 resource "aws_db_instance" "main" {
   identifier = "${local.name}-db"
 
-  engine         = "postgres"
-  engine_version = "17"
-  instance_class = var.db_instance_class
+  engine = "postgres"
+  # Pin the full minor version and disable auto upgrades. With `apply_immediately`
+  # set, letting AWS float the minor version means a routine re-apply after a new
+  # minor is published would restart the DB outside any maintenance window.
+  engine_version             = "17.4"
+  auto_minor_version_upgrade = false
+  instance_class             = var.db_instance_class
 
   allocated_storage = var.db_allocated_storage
   storage_type      = "gp3"
@@ -72,6 +76,16 @@ resource "aws_secretsmanager_secret_version" "database_url" {
 
 # JWT signing secret — kept separate from DATABASE_URL so it can be rotated
 # independently. Set via TF_VAR_jwt_secret; see variables.tf for details.
+#
+# If no secret is supplied we generate a strong random one rather than storing
+# an empty string (which would make the API crash-loop now that it fails closed
+# in production). Supply your own via TF_VAR_jwt_secret to keep it stable across
+# `terraform apply`s — a generated value changes only if this resource is replaced.
+resource "random_password" "jwt_secret" {
+  length  = 48
+  special = false
+}
+
 resource "aws_secretsmanager_secret" "jwt_secret" {
   name                    = "${local.name}/jwt-secret"
   recovery_window_in_days = 0 # dev convenience; remove for production
@@ -79,5 +93,16 @@ resource "aws_secretsmanager_secret" "jwt_secret" {
 
 resource "aws_secretsmanager_secret_version" "jwt_secret" {
   secret_id     = aws_secretsmanager_secret.jwt_secret.id
-  secret_string = var.jwt_secret
+  secret_string = var.jwt_secret != "" ? var.jwt_secret : random_password.jwt_secret.result
+}
+
+# OpenAI API key for the Intelligence service. Set via TF_VAR_openai_api_key.
+resource "aws_secretsmanager_secret" "openai_api_key" {
+  name                    = "${local.name}/openai-api-key"
+  recovery_window_in_days = 0 # dev convenience; remove for production
+}
+
+resource "aws_secretsmanager_secret_version" "openai_api_key" {
+  secret_id     = aws_secretsmanager_secret.openai_api_key.id
+  secret_string = var.openai_api_key
 }

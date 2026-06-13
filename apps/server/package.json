@@ -5,6 +5,9 @@
   "description": "SiteCRM primary Fastify API. Contract documented in openapi/openapi.yaml and served interactively at /docs.",
   "type": "module",
   "main": "dist/server.js",
+  "engines": {
+    "node": ">=20.12"
+  },
   "scripts": {
     "dev": "tsx watch src/server.ts",
     "build": "tsc -p tsconfig.json",

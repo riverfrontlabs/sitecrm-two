@@ -1,4 +1,5 @@
 import type { FastifyPluginAsync } from 'fastify';
+import { UnsafeUrlError, assertSafeScrapeUrl } from '../lib/url-guard.js';
 
 /**
  * Enrich request body — minimal lead identity to kick off the pipeline.
@@ -52,6 +53,16 @@ export const enrichRoutes: FastifyPluginAsync = async (app) => {
             },
           },
         },
+      },
+      // The pipeline scrapes `website`, so apply the same SSRF guard when present.
+      preHandler: async (request, reply) => {
+        if (!request.body.website) return;
+        try {
+          await assertSafeScrapeUrl(request.body.website);
+        } catch (err) {
+          const message = err instanceof UnsafeUrlError ? err.message : 'Invalid URL.';
+          return reply.status(400).send({ statusCode: 400, error: 'Bad Request', message });
+        }
       },
     },
     async (request) => {

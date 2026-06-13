@@ -24,6 +24,11 @@ variable "vpc_id" {
   type        = string
 }
 
+variable "vpc_cidr" {
+  description = "CIDR block of the VPC — used to scope the app security group ingress to in-VPC traffic only."
+  type        = string
+}
+
 variable "public_subnet_ids" {
   description = "Public subnet IDs for the ECS Fargate task."
   type        = list(string)

@@ -95,19 +95,30 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     logger,
     ajv: {
       customOptions: {
-        // Reject unknown properties rather than silently stripping them —
-        // the OpenAPI spec promises a 400 for `additionalProperties: false`.
+        // Keep AJV's default (do not strip unknown props). Rejection of unknown
+        // properties comes from each schema's own `additionalProperties: false`,
+        // which is what produces the 400 the OpenAPI spec promises. Setting this
+        // to `true` would silently strip unknowns and defeat that — leave it off.
         removeAdditional: false,
       },
     },
   });
 
+  // Fail closed: never sign tokens with a guessable secret in production. In
+  // dev/test a fallback keeps the app bootable without env setup, but a missing
+  // secret in production is a full auth-bypass risk (anyone could forge a JWT).
+  if (!jwtSecret && process.env.NODE_ENV === 'production') {
+    throw new Error('JWT_SECRET must be set in production — refusing to start with an insecure fallback.');
+  }
+
   // The web dev server (Vite, port 5173) and builder (port 5174) proxy /api in
-  // development; an open CORS policy also allows direct tool calls.
-  await app.register(cors, { origin: true });
+  // development. CORS is reflected by default for local tooling; set
+  // ALLOWED_ORIGINS (comma-separated) to lock it down in production.
+  const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(',').map((o) => o.trim()).filter(Boolean);
+  await app.register(cors, { origin: allowedOrigins && allowedOrigins.length > 0 ? allowedOrigins : true });
 
   await app.register(jwt, {
-    secret: jwtSecret ?? 'dev-fallback-change-in-production',
+    secret: jwtSecret ?? 'dev-only-insecure-fallback-not-for-production',
   });
 
   await app.register(swagger, {

@@ -62,7 +62,7 @@ function readStoredTheme(storageKey: string, fallback: ThemeName): ThemeName {
  */
 export function ThemeProvider({
   defaultTheme = DEFAULT_THEME,
-  storageKey = 'sitetwo.theme',
+  storageKey = 'sitecrm.theme',
   children,
 }: ThemeProviderProps) {
   const [theme, setThemeState] = useState<ThemeName>(() =>

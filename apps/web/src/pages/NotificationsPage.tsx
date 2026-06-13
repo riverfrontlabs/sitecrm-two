@@ -15,6 +15,7 @@ export function NotificationsPage() {
   const markAll = useMutation({
     mutationFn: () => notificationsApi.markAllRead(),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['notifications'] }),
+    onError: () => qc.invalidateQueries({ queryKey: ['notifications'] }),
   });
 
   return (
@@ -56,28 +57,33 @@ function NotificationItem({ notification: n }: { notification: Notification }) {
   const markRead = useMutation({
     mutationFn: () => notificationsApi.markRead(n.id),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['notifications'] }),
+    onError: () => qc.invalidateQueries({ queryKey: ['notifications'] }),
   });
 
-  const handleClick = () => {
+  const activate = () => {
     if (!n.read) markRead.mutate();
-    if (n.data?.leadId) navigate(`/leads/${n.data.leadId}`);
+    const leadId = n.data?.leadId;
+    if (typeof leadId === 'string') navigate(`/leads/${leadId}`);
   };
 
   return (
-    <li
-      onClick={handleClick}
-      className={`flex cursor-pointer items-start gap-3 px-4 py-3 transition-colors hover:bg-overlay ${!n.read ? 'bg-interactive/5' : ''}`}
-    >
-      <div className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${n.read ? 'bg-transparent' : 'bg-interactive'}`} />
-      <div className="min-w-0 flex-1">
-        <p className={`text-sm ${n.read ? 'text-ink-muted' : 'font-medium text-ink'}`}>{n.title}</p>
-        <p className="text-xs text-ink-muted">{n.body}</p>
-        <p className="mt-0.5 text-xs text-ink-muted">
-          {new Date(n.createdAt).toLocaleString(undefined, {
-            month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
-          })}
-        </p>
-      </div>
+    <li className={!n.read ? 'bg-interactive/5' : undefined}>
+      <button
+        type="button"
+        onClick={activate}
+        className="flex w-full items-start gap-3 px-4 py-3 text-left transition-colors hover:bg-overlay focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-interactive"
+      >
+        <span aria-hidden className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${n.read ? 'bg-transparent' : 'bg-interactive'}`} />
+        <span className="min-w-0 flex-1">
+          <span className={`block text-sm ${n.read ? 'text-ink-muted' : 'font-medium text-ink'}`}>{n.title}</span>
+          <span className="block text-xs text-ink-muted">{n.body}</span>
+          <span className="mt-0.5 block text-xs text-ink-muted">
+            {new Date(n.createdAt).toLocaleString(undefined, {
+              month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
+            })}
+          </span>
+        </span>
+      </button>
     </li>
   );
 }

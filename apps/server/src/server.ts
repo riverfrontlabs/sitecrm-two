@@ -32,7 +32,11 @@ const DATABASE_URL = process.env.DATABASE_URL;
 const JWT_SECRET = process.env.JWT_SECRET;
 
 if (!JWT_SECRET) {
-  console.warn('[server] JWT_SECRET is not set — using an insecure fallback. Set it in .env.');
+  if (process.env.NODE_ENV === 'production') {
+    console.error('[server] JWT_SECRET is not set. Refusing to start in production with an insecure fallback.');
+    process.exit(1);
+  }
+  console.warn('[server] JWT_SECRET is not set — using an insecure dev fallback. Set it in .env.');
 }
 
 const db = DATABASE_URL ? await createDb(DATABASE_URL) : undefined;

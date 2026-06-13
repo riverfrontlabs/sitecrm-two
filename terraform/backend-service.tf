@@ -87,6 +87,25 @@ resource "aws_service_discovery_service" "api" {
   health_check_custom_config {}
 }
 
+# Intelligence is reached directly by the API container (not via API Gateway),
+# so a plain A record is enough — it resolves `intelligence.<name>.local` to the
+# task's private IP.
+resource "aws_service_discovery_service" "intelligence" {
+  name = "intelligence"
+
+  dns_config {
+    namespace_id   = aws_service_discovery_private_dns_namespace.main.id
+    routing_policy = "MULTIVALUE"
+
+    dns_records {
+      type = "A"
+      ttl  = 10
+    }
+  }
+
+  health_check_custom_config {}
+}
+
 # ------------------------------------------------------------------ IAM ----
 
 # Execution role: what the ECS *agent* needs before the container starts —
@@ -121,6 +140,7 @@ resource "aws_iam_role_policy" "read_secrets" {
       Resource = [
         aws_secretsmanager_secret.database_url.arn,
         aws_secretsmanager_secret.jwt_secret.arn,
+        aws_secretsmanager_secret.openai_api_key.arn,
       ]
     }]
   })
@@ -145,6 +165,11 @@ resource "aws_iam_role" "task" {
 
 resource "aws_cloudwatch_log_group" "api" {
   name              = "/ecs/${local.name}-api"
+  retention_in_days = 14
+}
+
+resource "aws_cloudwatch_log_group" "intelligence" {
+  name              = "/ecs/${local.name}-intelligence"
   retention_in_days = 14
 }
 
@@ -247,4 +272,86 @@ resource "aws_ecs_service" "api" {
   wait_for_steady_state = false # first apply happens before any image is pushed
 
   depends_on = [aws_db_instance.main]
+}
+
+# ------------------------------------------------- Intelligence service ----
+
+resource "aws_ecs_task_definition" "intelligence" {
+  family                   = "${local.name}-intelligence"
+  requires_compatibilities = ["FARGATE"]
+  network_mode             = "awsvpc"
+  cpu                      = var.intelligence_cpu
+  memory                   = var.intelligence_memory
+  execution_role_arn       = aws_iam_role.task_execution.arn
+  task_role_arn            = aws_iam_role.task.arn
+
+  runtime_platform {
+    operating_system_family = "LINUX"
+    cpu_architecture        = "X86_64"
+  }
+
+  container_definitions = jsonencode([
+    {
+      name      = "intelligence"
+      image     = "${aws_ecr_repository.intelligence.repository_url}:${var.intelligence_image_tag}"
+      essential = true
+
+      portMappings = [{ containerPort = 3001, protocol = "tcp" }]
+
+      secrets = [
+        {
+          name      = "OPENAI_API_KEY"
+          valueFrom = aws_secretsmanager_secret.openai_api_key.arn
+        },
+      ]
+
+      environment = [
+        { name = "PORT", value = "3001" },
+        { name = "HOST", value = "0.0.0.0" },
+        { name = "NODE_ENV", value = "production" },
+        # Only the API service (same VPC) calls this; lock CORS to that origin.
+        { name = "CORS_ORIGIN", value = "http://api.${local.name}.local:3000" },
+      ]
+
+      healthCheck = {
+        command     = ["CMD-SHELL", "wget -qO- http://localhost:3001/health || exit 1"]
+        interval    = 30
+        timeout     = 5
+        retries     = 3
+        startPeriod = 15
+      }
+
+      logConfiguration = {
+        logDriver = "awslogs"
+        options = {
+          "awslogs-group"         = aws_cloudwatch_log_group.intelligence.name
+          "awslogs-region"        = var.aws_region
+          "awslogs-stream-prefix" = "intelligence"
+        }
+      }
+    }
+  ])
+}
+
+resource "aws_ecs_service" "intelligence" {
+  name            = "intelligence"
+  cluster         = aws_ecs_cluster.main.id
+  task_definition = aws_ecs_task_definition.intelligence.arn
+  desired_count   = var.intelligence_desired_count
+  launch_type     = "FARGATE"
+
+  network_configuration {
+    subnets         = aws_subnet.public[*].id
+    security_groups = [aws_security_group.intelligence.id]
+    # Public IP for image pulls, OpenAI calls, and scraping — inbound is still
+    # restricted to the API security group by aws_security_group.intelligence.
+    assign_public_ip = true
+  }
+
+  service_registries {
+    registry_arn = aws_service_discovery_service.intelligence.arn
+  }
+
+  force_new_deployment  = true
+  wait_for_steady_state = false # first apply happens before any image is pushed
 }

@@ -9,10 +9,18 @@
 # api_image_tag     = "latest"
 # api_desired_count = 1
 
+# Intelligence service image + sizing (Playwright + OpenAI; heavier than the API).
+# intelligence_image_tag     = "latest"
+# intelligence_desired_count = 1
+# intelligence_cpu           = 512
+# intelligence_memory        = 1024
+
 # Database sizing.
 # db_instance_class    = "db.t4g.micro"
 # db_allocated_storage = 20
 
-# JWT secret — NEVER put a real value here; pass via environment variable:
-#   export TF_VAR_jwt_secret=$(openssl rand -hex 32)
-# jwt_secret = ""
+# Secrets — NEVER put real values here; pass via environment variables:
+#   export TF_VAR_jwt_secret=$(openssl rand -hex 32)   # optional; auto-generated if unset
+#   export TF_VAR_openai_api_key=sk-...                # required for the Intelligence service
+# jwt_secret     = ""
+# openai_api_key = ""

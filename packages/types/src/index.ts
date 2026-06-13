@@ -33,6 +33,10 @@ export interface User {
 export interface JwtPayload {
   sub: string;
   email: string;
+  /** Issued-at (epoch seconds) — added by the JWT signer. */
+  iat?: number;
+  /** Expiry (epoch seconds) — present when the token is signed with an expiry. */
+  exp?: number;
 }
 
 export interface RegisterRequest {
@@ -55,21 +59,34 @@ export interface AuthResponse {
 
 // ── Leads ─────────────────────────────────────────────────────────────────────
 
-export type LeadStatus = 'new' | 'contacted' | 'qualified' | 'proposal' | 'won' | 'lost';
+/**
+ * Canonical lead pipeline stages, in funnel order. Exported as a runtime array
+ * so consumers (UI ordering, JSON-schema enums, DB `$type`) derive from one
+ * source instead of re-listing the values.
+ */
+export const LEAD_STATUSES = ['new', 'contacted', 'qualified', 'proposal', 'won', 'lost'] as const;
+export type LeadStatus = (typeof LEAD_STATUSES)[number];
 
-/** Channels available for outreach. SMS is intentionally excluded. */
-export type OutreachChannel = 'email' | 'facebook_dm' | 'instagram_dm';
+/** Channels available for outreach. SMS is intentionally excluded (regulatory). */
+export const OUTREACH_CHANNELS = ['email', 'facebook_dm', 'instagram_dm'] as const;
+export type OutreachChannel = (typeof OUTREACH_CHANNELS)[number];
 
-export type ContactEventType =
-  | 'email_sent'
-  | 'email_opened'
-  | 'email_clicked'
-  | 'facebook_dm_sent'
-  | 'facebook_dm_received'
-  | 'instagram_dm_sent'
-  | 'instagram_dm_received'
-  | 'call'
-  | 'meeting';
+export const CONTACT_EVENT_TYPES = [
+  'email_sent',
+  'email_opened',
+  'email_clicked',
+  'facebook_dm_sent',
+  'facebook_dm_received',
+  'instagram_dm_sent',
+  'instagram_dm_received',
+  'call',
+  'meeting',
+] as const;
+export type ContactEventType = (typeof CONTACT_EVENT_TYPES)[number];
+
+/** `sent` = we initiated; `received` = the lead replied. */
+export const CONTACT_DIRECTIONS = ['sent', 'received'] as const;
+export type ContactDirection = (typeof CONTACT_DIRECTIONS)[number];
 
 export interface Lead {
   id: string;
@@ -124,8 +141,7 @@ export interface ContactEvent {
   leadId: string;
   type: ContactEventType;
   channel: OutreachChannel;
-  /** `sent` = we initiated; `received` = lead replied. */
-  direction: 'sent' | 'received';
+  direction: ContactDirection;
   detail?: string;
   /** Meta message ID or email provider message ID for deduplication. */
   externalId?: string;
@@ -163,14 +179,16 @@ export interface OutreachStep {
 
 // ── Notifications ─────────────────────────────────────────────────────────────
 
-export type NotificationType =
-  | 'dm_received'
-  | 'email_reply'
-  | 'lead_status_change'
-  | 'deployment_complete'
-  | 'build_complete'
-  | 'job_complete'
-  | 'job_failed';
+export const NOTIFICATION_TYPES = [
+  'dm_received',
+  'email_reply',
+  'lead_status_change',
+  'deployment_complete',
+  'build_complete',
+  'job_complete',
+  'job_failed',
+] as const;
+export type NotificationType = (typeof NOTIFICATION_TYPES)[number];
 
 export interface Notification {
   id: string;
@@ -283,6 +301,10 @@ export interface MetaConnection {
 
 export type JobStatus = 'pending' | 'running' | 'complete' | 'failed';
 
+/** Discrete units of work the intelligence service can run for a job. */
+export const INTELLIGENCE_TASKS = ['enrich', 'score', 'generate'] as const;
+export type IntelligenceTask = (typeof INTELLIGENCE_TASKS)[number];
+
 /** An async enrichment/scrape job spawned by the intelligence service. */
 export interface Job {
   id: string;
@@ -290,14 +312,31 @@ export interface Job {
   status: JobStatus;
   businessTypes: string[];
   locations: string[];
-  /** Which intelligence tasks to run: `'enrich' | 'score' | 'generate'`. */
-  enabledTasks: string[];
+  /** Which intelligence tasks to run. */
+  enabledTasks: IntelligenceTask[];
   totalFound: number;
   totalEnriched: number;
   error?: string;
   startedAt?: string;
   completedAt?: string;
   createdAt: string;
+}
+
+// ── Analytics ─────────────────────────────────────────────────────────────────
+
+/** One day's pipeline funnel counts for a user — powers the analytics dashboard. */
+export interface DailySnapshot {
+  id: string;
+  userId: string;
+  /** Calendar day in `YYYY-MM-DD` form (one row per user per day). */
+  date: string;
+  total: number;
+  contacted: number;
+  replied: number;
+  qualified: number;
+  proposal: number;
+  won: number;
+  lost: number;
 }
 
 // ── Shared API Primitives ─────────────────────────────────────────────────────

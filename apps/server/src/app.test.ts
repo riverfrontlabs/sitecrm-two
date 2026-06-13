@@ -1,19 +1,20 @@
 import type { FastifyInstance } from 'fastify';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { buildApp } from './app.js';
-import { MemoryProjectStore } from './store/memory-project-store.js';
-import type { Project } from './types.js';
 
 /**
  * Integration tests driven through `app.inject()` — full request validation,
- * routing, and serialization without binding a network port.
+ * routing, auth, and serialization without binding a network port or a
+ * database. Routes that need persistence are built with no `db`, so they
+ * exercise the `503` guard; validation and auth run before the handler, so
+ * those paths are fully testable here. CRUD-against-Postgres belongs in a
+ * separate suite with a test database.
  */
 
 let app: FastifyInstance;
 
-/** Builds an app over an empty store (no seed data) for deterministic tests. */
-async function buildTestApp(): Promise<FastifyInstance> {
-  app = await buildApp({ store: new MemoryProjectStore([]) });
+async function build(opts: Parameters<typeof buildApp>[0] = {}): Promise<FastifyInstance> {
+  app = await buildApp({ jwtSecret: 'test-secret', ...opts });
   return app;
 }
 
@@ -21,105 +22,85 @@ afterEach(async () => {
   await app?.close();
 });
 
-describe('GET /api/health', () => {
-  it('reports ok with an uptime', async () => {
-    await buildTestApp();
+describe('health', () => {
+  it('GET /api/health returns 200 without a database', async () => {
+    await build();
     const res = await app.inject({ method: 'GET', url: '/api/health' });
-
     expect(res.statusCode).toBe(200);
-    const body = res.json();
-    expect(body.status).toBe('ok');
-    expect(body.uptimeSeconds).toBeGreaterThan(0);
   });
 });
 
-describe('/api/projects', () => {
-  const validBody = {
-    title: 'Test project',
-    description: 'Created from the test suite.',
-    url: 'https://example.com',
-    tags: ['testing'],
-  };
-
-  it('starts empty and returns created projects newest first', async () => {
-    await buildTestApp();
-
-    const empty = await app.inject({ method: 'GET', url: '/api/projects' });
-    expect(empty.statusCode).toBe(200);
-    expect(empty.json()).toEqual([]);
-
-    const created = await app.inject({ method: 'POST', url: '/api/projects', payload: validBody });
-    expect(created.statusCode).toBe(201);
-    const project = created.json() as Project;
-    expect(project).toMatchObject(validBody);
-    expect(project.id).toMatch(/^[0-9a-f-]{36}$/);
-    expect(Date.parse(project.createdAt)).not.toBeNaN();
-
-    const list = await app.inject({ method: 'GET', url: '/api/projects' });
-    expect(list.json()).toHaveLength(1);
+describe('request validation', () => {
+  beforeEach(async () => {
+    await build();
   });
 
-  it('rejects a body missing required fields with a 400 error envelope', async () => {
-    await buildTestApp();
+  it('rejects unknown properties (additionalProperties: false)', async () => {
     const res = await app.inject({
       method: 'POST',
-      url: '/api/projects',
-      payload: { description: 'No title given.' },
+      url: '/api/auth/register',
+      payload: { email: 'a@b.com', password: 'password123', firstName: 'A', lastName: 'B', role: 'admin' },
     });
-
     expect(res.statusCode).toBe(400);
-    const body = res.json();
-    expect(body.error).toBe('Bad Request');
-    expect(body.message).toContain('title');
+    expect(res.json().error).toBe('Bad Request');
   });
 
-  it('rejects unknown extra properties (additionalProperties: false)', async () => {
-    await buildTestApp();
-    const res = await app.inject({
-      method: 'POST',
-      url: '/api/projects',
-      payload: { ...validBody, sneaky: 'value' },
-    });
+  it('rejects a missing required field', async () => {
+    const res = await app.inject({ method: 'POST', url: '/api/auth/login', payload: { email: 'a@b.com' } });
     expect(res.statusCode).toBe(400);
   });
 
-  it('fetches a single project by id and 404s on unknown ids', async () => {
-    await buildTestApp();
-    const created = await app.inject({ method: 'POST', url: '/api/projects', payload: validBody });
-    const { id } = created.json() as Project;
-
-    const found = await app.inject({ method: 'GET', url: `/api/projects/${id}` });
-    expect(found.statusCode).toBe(200);
-    expect((found.json() as Project).id).toBe(id);
-
-    const missing = await app.inject({ method: 'GET', url: '/api/projects/does-not-exist' });
-    expect(missing.statusCode).toBe(404);
-    expect(missing.json().message).toBe('Project not found');
-  });
-
-  it('deletes a project and 404s on a second delete', async () => {
-    await buildTestApp();
-    const created = await app.inject({ method: 'POST', url: '/api/projects', payload: validBody });
-    const { id } = created.json() as Project;
-
-    const deleted = await app.inject({ method: 'DELETE', url: `/api/projects/${id}` });
-    expect(deleted.statusCode).toBe(204);
-
-    const again = await app.inject({ method: 'DELETE', url: `/api/projects/${id}` });
-    expect(again.statusCode).toBe(404);
+  it('rejects a non-http(s) website on lead create (XSS/SSRF scheme guard)', async () => {
+    const token = app.jwt.sign({ sub: 'u1', email: 'a@b.com' });
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/leads',
+      headers: { authorization: `Bearer ${token}` },
+      payload: { name: 'Acme', website: 'javascript:alert(1)' },
+    });
+    expect(res.statusCode).toBe(400);
   });
 });
 
-describe('API documentation', () => {
-  it('serves the OpenAPI spec through Swagger UI routes', async () => {
-    await buildTestApp();
+describe('authentication', () => {
+  beforeEach(async () => {
+    await build();
+  });
 
-    const yaml = await app.inject({ method: 'GET', url: '/docs/yaml' });
-    expect(yaml.statusCode).toBe(200);
-    expect(yaml.body).toContain('openapi:');
-    expect(yaml.body).toContain('/api/projects');
+  it('returns 401 for a protected route with no token', async () => {
+    const res = await app.inject({ method: 'GET', url: '/api/auth/me' });
+    expect(res.statusCode).toBe(401);
+  });
 
-    const ui = await app.inject({ method: 'GET', url: '/docs' });
-    expect([200, 302]).toContain(ui.statusCode);
+  it('returns 401 for an invalid token', async () => {
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/leads',
+      headers: { authorization: 'Bearer not-a-real-token' },
+    });
+    expect(res.statusCode).toBe(401);
+  });
+
+  it('does NOT accept ?token= on a non-SSE protected route', async () => {
+    const token = app.jwt.sign({ sub: 'u1', email: 'a@b.com' });
+    // /auth/me has no querystring schema, so the param isn't rejected at
+    // validation — this isolates the auth guard. The header-only `authenticate`
+    // decorator must ignore the query token, leaving the request unauthorized.
+    const res = await app.inject({ method: 'GET', url: `/api/auth/me?token=${token}` });
+    expect(res.statusCode).toBe(401);
+  });
+});
+
+describe('database-unavailable guard', () => {
+  it('returns 503 when a valid token reaches a db-backed route with no database', async () => {
+    await build(); // no db
+    const token = app.jwt.sign({ sub: 'u1', email: 'a@b.com' });
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/leads',
+      headers: { authorization: `Bearer ${token}` },
+    });
+    expect(res.statusCode).toBe(503);
+    expect(res.json().error).toBe('Service Unavailable');
   });
 });

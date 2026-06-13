@@ -13,6 +13,7 @@
  */
 import { and, count, desc, eq } from 'drizzle-orm';
 import type { FastifyPluginAsync } from 'fastify';
+import { NOTIFICATION_TYPES } from '@sitecrm/types';
 import type { Database } from '../app.js';
 import { notifications } from '../db/schema.js';
 
@@ -27,7 +28,7 @@ const notificationSchema = {
   properties: {
     id: { type: 'string', format: 'uuid' },
     userId: { type: 'string', format: 'uuid' },
-    type: { type: 'string' },
+    type: { type: 'string', enum: NOTIFICATION_TYPES },
     title: { type: 'string' },
     body: { type: 'string' },
     data: { type: 'object', nullable: true },
@@ -52,7 +53,7 @@ const listNotificationsQuery = {
   type: 'object',
   additionalProperties: false,
   properties: {
-    page: { type: 'integer', minimum: 1, default: 1 },
+    page: { type: 'integer', minimum: 1, maximum: 100000, default: 1 },
     pageSize: { type: 'integer', minimum: 1, maximum: 100, default: 20 },
     unread: { type: 'boolean' },
   },
@@ -97,7 +98,7 @@ export const notificationRoutes: FastifyPluginAsync<NotificationRoutesOptions> =
     async (request, reply) => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       if (!db) return (reply as any).status(503).send({ statusCode: 503, error: 'Service Unavailable', message: 'Database not configured' });
-      const { sub: userId } = request.user as { sub: string };
+      const { sub: userId } = request.user;
       const { page = 1, pageSize = 20, unread } = request.query;
 
       const conditions = [eq(notifications.userId, userId)];
@@ -136,7 +137,7 @@ export const notificationRoutes: FastifyPluginAsync<NotificationRoutesOptions> =
     async (request, reply) => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       if (!db) return (reply as any).status(503).send({ statusCode: 503, error: 'Service Unavailable', message: 'Database not configured' });
-      const { sub: userId } = request.user as { sub: string };
+      const { sub: userId } = request.user;
 
       const [updated] = await db
         .update(notifications)
@@ -165,7 +166,7 @@ export const notificationRoutes: FastifyPluginAsync<NotificationRoutesOptions> =
     async (request, reply) => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       if (!db) return (reply as any).status(503).send({ statusCode: 503, error: 'Service Unavailable', message: 'Database not configured' });
-      const { sub: userId } = request.user as { sub: string };
+      const { sub: userId } = request.user;
 
       const updated = await db
         .update(notifications)
@@ -185,7 +186,7 @@ export const notificationRoutes: FastifyPluginAsync<NotificationRoutesOptions> =
   app.get(
     '/notifications/stream',
     {
-      preHandler: [app.authenticate],
+      preHandler: [app.authenticateSSE],
       schema: { querystring: { type: 'object', properties: { token: { type: 'string' } } } },
     },
     async (_request, reply) => {

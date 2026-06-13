@@ -64,11 +64,15 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
 
   const app = Fastify({ logger });
 
-  // Intelligence API is called only from the main server container — keep CORS
-  // locked down in production via the CORS_ORIGIN env var.
-  await app.register(cors, {
-    origin: process.env.CORS_ORIGIN ?? true,
-  });
+  // Intelligence API is called only from the main server container. Lock CORS
+  // down via CORS_ORIGIN; fail CLOSED in production if it's unset (an open
+  // default on an internal service is a footgun), but stay open in dev.
+  const corsOrigin = process.env.CORS_ORIGIN
+    ? process.env.CORS_ORIGIN.split(',').map((o) => o.trim()).filter(Boolean)
+    : process.env.NODE_ENV === 'production'
+      ? false
+      : true;
+  await app.register(cors, { origin: corsOrigin });
 
   await app.register(swagger, {
     mode: 'static',

@@ -1,7 +1,7 @@
-# @sitetwo/web
+# @sitecrm/web
 
-The React frontend for sitetwo-oh: Vite + React 19 + TypeScript + Tailwind
-CSS v4, themed end-to-end by `@sitetwo/design-system`.
+The React frontend for sitecrm-two: Vite + React 19 + TypeScript + Tailwind
+CSS v4, themed end-to-end by `@sitecrm/design-system`.
 
 ## Pages
 
@@ -14,14 +14,14 @@ CSS v4, themed end-to-end by `@sitetwo/design-system`.
 
 ```
 ┌─────────────────────────┐     /api/* (vite proxy)    ┌──────────────────┐
-│ @sitetwo/web (5173)     │ ─────────────────────────► │ @sitetwo/server  │
+│ @sitecrm/web (5173)     │ ─────────────────────────► │ @sitecrm/server  │
 │  pages/ components/     │                            │ (3001)           │
 │  api/client.ts ←────────┼── mirrors openapi.yaml ──► │ openapi/         │
 └────────────┬────────────┘                            └──────────────────┘
              │ imports components + tokens
              ▼
 ┌─────────────────────────┐
-│ @sitetwo/design-system  │
+│ @sitecrm/design-system  │
 └─────────────────────────┘
 ```
 
@@ -56,9 +56,9 @@ src/
 | Command (from repo root)          | What it does                                 |
 | --------------------------------- | -------------------------------------------- |
 | `npm run dev:web`                 | Vite dev server on <http://localhost:5173>.  |
-| `npm test -w @sitetwo/web`        | Vitest + Testing Library suite (jsdom).      |
-| `npm run build -w @sitetwo/web`   | Type-check then production build to `dist/`. |
-| `npm run preview -w @sitetwo/web` | Serve the production build locally.          |
+| `npm test -w @sitecrm/web`        | Vitest + Testing Library suite (jsdom).      |
+| `npm run build -w @sitecrm/web`   | Type-check then production build to `dist/`. |
+| `npm run preview -w @sitecrm/web` | Serve the production build locally.          |
 
 ## Testing approach
 

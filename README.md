@@ -1,4 +1,4 @@
-# sitetwo-oh
+# sitecrm-two
 
 A full-stack TypeScript application built as a documented, themeable
 foundation:
@@ -15,7 +15,7 @@ OpenAPI YAML spec served through Swagger UI.
 ## Repository layout
 
 ```
-sitetwo-oh/
+sitecrm-two/
 ├── apps/
 │   ├── web/                 React app (port 5173) — see apps/web/README.md
 │   │   └── src/pages/DesignSystemPage.tsx   ← live preview at /design
@@ -77,11 +77,11 @@ Then open:
 ## Architecture at a glance
 
 ```
- Browser ──► @sitetwo/web (Vite, 5173)
+ Browser ──► @sitecrm/web (Vite, 5173)
                 │  ▲
         /api/* proxy  │ components & tokens
                 ▼  │
-   @sitetwo/server (Fastify, 3001)      @sitetwo/design-system
+   @sitecrm/server (Fastify, 3001)      @sitecrm/design-system
         │                                    │
    openapi/openapi.yaml ◄── contract ──► themeable via data-theme +
    (served at /docs)                     CSS custom properties

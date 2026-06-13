@@ -14,14 +14,22 @@
 import { buildApp } from './app.js';
 
 try {
-  // Node's built-in dotenv (21.7+). Optional — absence means use actual env.
+  // Node's built-in env-file loader (requires Node >= 20.12; see package.json
+  // engines). Optional — a missing .env just means "use the actual environment".
   process.loadEnvFile();
 } catch {
-  // No .env file present; environment comes from the actual environment.
+  // No .env file present (or unsupported Node); fall back to the real environment.
 }
 
 const PORT = Number(process.env.PORT ?? 3001);
 const HOST = process.env.HOST ?? '127.0.0.1';
+
+// Scoring/enrichment can't work without an OpenAI key — fail fast in production
+// with a clear message rather than surfacing per-request 401s from OpenAI later.
+if (!process.env.OPENAI_API_KEY && process.env.NODE_ENV === 'production') {
+  console.error('[intelligence] OPENAI_API_KEY is not set. Refusing to start in production.');
+  process.exit(1);
+}
 
 const app = await buildApp({ logger: true });
 

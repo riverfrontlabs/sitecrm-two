@@ -1,4 +1,4 @@
-# @sitetwo/design-system
+# @sitecrm/design-system
 
 A themeable React design system: CSS-variable design tokens, theme
 definitions, and accessible UI primitives. Components never hard-code
@@ -48,11 +48,11 @@ of themes — `light`, `dark`, and `ocean` ship by default.
 ```css
 /* app entry CSS */
 @import 'tailwindcss';
-@import '@sitetwo/design-system/tokens.css';
+@import '@sitecrm/design-system/tokens.css';
 ```
 
 ```tsx
-import { ThemeProvider } from '@sitetwo/design-system';
+import { ThemeProvider } from '@sitecrm/design-system';
 
 createRoot(rootEl).render(
   <ThemeProvider>
@@ -79,9 +79,9 @@ Every export carries full JSDoc — hover it in your editor for usage examples.
 
 | Command                                        | What it does                                 |
 | ---------------------------------------------- | -------------------------------------------- |
-| `npm test -w @sitetwo/design-system`           | Run the Vitest + Testing Library suite once. |
-| `npm run test:watch -w @sitetwo/design-system` | Watch mode.                                  |
-| `npm run typecheck -w @sitetwo/design-system`  | Strict TypeScript check, no emit.            |
+| `npm test -w @sitecrm/design-system`           | Run the Vitest + Testing Library suite once. |
+| `npm run test:watch -w @sitecrm/design-system` | Watch mode.                                  |
+| `npm run typecheck -w @sitecrm/design-system`  | Strict TypeScript check, no emit.            |
 
 ## Design decisions
 
