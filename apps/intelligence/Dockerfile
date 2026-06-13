@@ -41,7 +41,7 @@ COPY packages/site-templates/package.json packages/site-templates/
 RUN npm ci --workspace @sitecrm/intelligence --omit=dev
 
 COPY --from=build /repo/apps/intelligence/dist apps/intelligence/dist
-COPY apps/intelligence/openapi apps/intelligence/openapi
+# No spec file to copy — OpenAPI is generated from the route schemas at boot.
 
 ENV HOST=0.0.0.0
 ENV PORT=3001

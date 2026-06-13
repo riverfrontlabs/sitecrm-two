@@ -35,6 +35,10 @@ export const scrapeRoutes: FastifyPluginAsync = async (app) => {
     '/scrape',
     {
       schema: {
+        tags: ['intelligence'],
+        summary: 'Scrape a website',
+        description: 'Navigates to the URL with headless Chromium and returns page metadata. Rejects non-public targets (SSRF guard).',
+        operationId: 'scrapeWebsite',
         body: scrapeBodySchema,
         response: {
           200: {
@@ -44,6 +48,14 @@ export const scrapeRoutes: FastifyPluginAsync = async (app) => {
               title: { type: 'string' },
               description: { type: 'string' },
               screenshot: { type: 'string', description: 'Base-64 encoded PNG thumbnail' },
+            },
+          },
+          400: {
+            type: 'object',
+            properties: {
+              statusCode: { type: 'integer' },
+              error: { type: 'string' },
+              message: { type: 'string' },
             },
           },
         },

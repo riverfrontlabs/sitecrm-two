@@ -19,8 +19,8 @@ sitecrm-two/
 ├── apps/
 │   ├── web/                 React app (port 5173) — see apps/web/README.md
 │   │   └── src/pages/DesignSystemPage.tsx   ← live preview at /design
-│   └── server/              Fastify REST API (port 3001) — see apps/server/README.md
-│       └── openapi/openapi.yaml             ← API source of truth, served at /docs
+│   └── server/              Fastify REST API (port 3000) — see apps/server/README.md
+│       └── src/routes/                      ← schemas generate the OpenAPI spec at /docs
 ├── packages/
 │   └── design-system/       tokens, themes, components — see packages/design-system/README.md
 ├── docker-compose.yml       API container + PostgreSQL database
@@ -57,10 +57,10 @@ Then open:
 
 | URL                               | What you get                                               |
 | --------------------------------- | ---------------------------------------------------------- |
-| <http://localhost:5173>           | The app — projects backed by the API.                      |
+| <http://localhost:5173>           | The CRM app (lead pipeline, outreach, hosting dashboard).  |
 | <http://localhost:5173/design>    | **Design-system preview**: all tokens, components, themes. |
-| <http://localhost:3001/docs>      | Interactive API documentation (Swagger UI).                |
-| <http://localhost:3001/docs/yaml> | Raw OpenAPI YAML.                                          |
+| <http://localhost:3000/docs>      | Interactive API documentation (Swagger UI).                |
+| <http://localhost:3000/docs/yaml> | Generated OpenAPI YAML.                                     |
 
 ## Scripts (run from the repo root)
 
@@ -81,17 +81,18 @@ Then open:
                 │  ▲
         /api/* proxy  │ components & tokens
                 ▼  │
-   @sitecrm/server (Fastify, 3001)      @sitecrm/design-system
+   @sitecrm/server (Fastify, 3000)      @sitecrm/design-system
         │                                    │
-   openapi/openapi.yaml ◄── contract ──► themeable via data-theme +
-   (served at /docs)                     CSS custom properties
+   route schemas ◄──── contract ──────► themeable via data-theme +
+   (generate OpenAPI at /docs)           CSS custom properties
 ```
 
 Three contracts hold the system together:
 
-1. **The API contract** — `apps/server/openapi/openapi.yaml`. The Fastify
-   route schemas and the web client (`apps/web/src/api/client.ts`) both
-   mirror it; change all three together.
+1. **The API contract** — the Fastify route schemas in `apps/server/src/routes/`,
+   which generate the OpenAPI spec served at `/docs`. Shared wire types live in
+   `@sitecrm/types`, consumed by both the routes and the web client
+   (`apps/web/src/api/client.ts`); change the schema and the type together.
 2. **The token contract** — `packages/design-system/src/styles/tokens.css`.
    Components only use semantic tokens (`--ds-color-ink`, not `#16181d`),
    which is what makes whole-app theming a one-attribute switch.

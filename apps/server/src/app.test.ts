@@ -91,6 +91,36 @@ describe('authentication', () => {
   });
 });
 
+describe('generated OpenAPI spec', () => {
+  beforeEach(async () => {
+    await build();
+  });
+
+  it('serves a generated spec at /docs/json with paths and the shared Error schema', async () => {
+    const res = await app.inject({ method: 'GET', url: '/docs/json' });
+    expect(res.statusCode).toBe(200);
+    const spec = res.json();
+    expect(spec.openapi).toMatch(/^3\./);
+    expect(spec.paths['/api/leads']).toBeDefined();
+    expect(spec.components.schemas.ErrorResponse).toBeDefined();
+  });
+
+  it('documents per-operation error responses generated from the route schemas', async () => {
+    const spec = (await app.inject({ method: 'GET', url: '/docs/json' })).json();
+    const listLeads = spec.paths['/api/leads'].get;
+    // 400/401/503 all present and pointing at the shared Error component.
+    for (const code of ['400', '401', '503']) {
+      expect(listLeads.responses[code]).toBeDefined();
+    }
+    expect(listLeads.responses['401'].content['application/json'].schema.$ref).toBe(
+      '#/components/schemas/ErrorResponse',
+    );
+    // Bearer auth is the global default; public routes override with `security: []`.
+    expect(spec.security).toEqual([{ bearerAuth: [] }]);
+    expect(spec.paths['/api/auth/login'].post.security).toEqual([]);
+  });
+});
+
 describe('database-unavailable guard', () => {
   it('returns 503 when a valid token reaches a db-backed route with no database', async () => {
     await build(); // no db

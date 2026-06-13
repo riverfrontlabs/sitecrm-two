@@ -40,6 +40,10 @@ export const enrichRoutes: FastifyPluginAsync = async (app) => {
     '/enrich',
     {
       schema: {
+        tags: ['intelligence'],
+        summary: 'Enrich a lead',
+        description: 'Combined scrape → score pipeline. Returns a unified enrichment payload the main server persists to the lead.',
+        operationId: 'enrichLead',
         body: enrichBodySchema,
         response: {
           200: {
@@ -50,6 +54,14 @@ export const enrichRoutes: FastifyPluginAsync = async (app) => {
               websiteGrade: { type: 'string' },
               websiteNotes: { type: 'string' },
               score: { type: 'number' },
+            },
+          },
+          400: {
+            type: 'object',
+            properties: {
+              statusCode: { type: 'integer' },
+              error: { type: 'string' },
+              message: { type: 'string' },
             },
           },
         },

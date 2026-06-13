@@ -16,8 +16,8 @@
  *   DELETE /leads/:id/notes/:noteId   — remove a specific note
  *   GET    /leads/:id/events          — list contact events newest-first
  *
- * Schemas mirror `components/schemas` in `openapi/openapi.yaml` — update
- * both files together when changing any request/response shape.
+ * The route `schema` blocks are the source for the generated OpenAPI spec
+ * (dynamic `@fastify/swagger`); there is no separate spec file to keep in sync.
  */
 import { and, count, desc, eq, ilike, inArray, or } from 'drizzle-orm';
 import type { FastifyPluginAsync } from 'fastify';
@@ -30,13 +30,14 @@ import {
 } from '@sitecrm/types';
 import type { Database } from '../app.js';
 import { contactEvents, leads, notes } from '../db/schema.js';
+import { errorRef } from './shared-schemas.js';
 
 export interface LeadRoutesOptions {
   /** Drizzle database instance. Routes return 503 when omitted. */
   db?: Database;
 }
 
-// ── JSON schemas (mirror openapi.yaml components/schemas) ────────────────────
+// ── JSON schemas (source for the generated OpenAPI `leads` operations) ───────
 // Enum value lists are imported from @sitecrm/types so the schema, the DB
 // column `$type`s, and the shared wire types can never drift apart.
 
@@ -172,13 +173,18 @@ const contactEventSchema = {
   },
 } as const;
 
-const errorSchema = {
+const idParam = {
   type: 'object',
-  required: ['statusCode', 'error', 'message'],
+  required: ['id'],
+  properties: { id: { type: 'string', description: 'Lead ID' } },
+} as const;
+
+const idNoteParam = {
+  type: 'object',
+  required: ['id', 'noteId'],
   properties: {
-    statusCode: { type: 'integer' },
-    error: { type: 'string' },
-    message: { type: 'string' },
+    id: { type: 'string', description: 'Lead ID' },
+    noteId: { type: 'string', description: 'Note ID' },
   },
 } as const;
 
@@ -219,7 +225,14 @@ export const leadRoutes: FastifyPluginAsync<LeadRoutesOptions> = async (app, opt
     '/leads',
     {
       preHandler: [app.authenticate],
-      schema: { querystring: listLeadsQuery, response: { 200: paginatedLeadsResponse, 503: errorSchema } },
+      schema: {
+        tags: ['leads'],
+        summary: 'List leads',
+        description: 'Paginated, filterable list of the caller’s leads (newest first).',
+        operationId: 'listLeads',
+        querystring: listLeadsQuery,
+        response: { 200: paginatedLeadsResponse, 400: errorRef, 401: errorRef, 503: errorRef },
+      },
     },
     async (request, reply) => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -265,7 +278,13 @@ export const leadRoutes: FastifyPluginAsync<LeadRoutesOptions> = async (app, opt
     '/leads',
     {
       preHandler: [app.authenticate],
-      schema: { body: createLeadBody, response: { 201: leadSchema, 503: errorSchema } },
+      schema: {
+        tags: ['leads'],
+        summary: 'Create a lead',
+        operationId: 'createLead',
+        body: createLeadBody,
+        response: { 201: leadSchema, 400: errorRef, 401: errorRef, 503: errorRef },
+      },
     },
     async (request, reply) => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -291,7 +310,13 @@ export const leadRoutes: FastifyPluginAsync<LeadRoutesOptions> = async (app, opt
     '/leads/:id',
     {
       preHandler: [app.authenticate],
-      schema: { response: { 200: leadSchema, 404: errorSchema, 503: errorSchema } },
+      schema: {
+        tags: ['leads'],
+        summary: 'Get a lead by ID',
+        operationId: 'getLead',
+        params: idParam,
+        response: { 200: leadSchema, 401: errorRef, 404: errorRef, 503: errorRef },
+      },
     },
     async (request, reply) => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -324,7 +349,15 @@ export const leadRoutes: FastifyPluginAsync<LeadRoutesOptions> = async (app, opt
     '/leads/:id',
     {
       preHandler: [app.authenticate],
-      schema: { body: updateLeadBody, response: { 200: leadSchema, 404: errorSchema, 503: errorSchema } },
+      schema: {
+        tags: ['leads'],
+        summary: 'Update a lead',
+        description: 'Patches any mutable fields. At least one property is required.',
+        operationId: 'updateLead',
+        params: idParam,
+        body: updateLeadBody,
+        response: { 200: leadSchema, 400: errorRef, 401: errorRef, 404: errorRef, 503: errorRef },
+      },
     },
     async (request, reply) => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -353,7 +386,14 @@ export const leadRoutes: FastifyPluginAsync<LeadRoutesOptions> = async (app, opt
     '/leads/:id',
     {
       preHandler: [app.authenticate],
-      schema: { response: { 204: {}, 404: errorSchema, 503: errorSchema } },
+      schema: {
+        tags: ['leads'],
+        summary: 'Delete a lead',
+        description: 'Hard delete; cascades to the lead’s notes and contact events.',
+        operationId: 'deleteLead',
+        params: idParam,
+        response: { 204: {}, 401: errorRef, 404: errorRef, 503: errorRef },
+      },
     },
     async (request, reply) => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -378,7 +418,13 @@ export const leadRoutes: FastifyPluginAsync<LeadRoutesOptions> = async (app, opt
     '/leads/:id/notes',
     {
       preHandler: [app.authenticate],
-      schema: { response: { 200: { type: 'array', items: noteSchema }, 404: errorSchema, 503: errorSchema } },
+      schema: {
+        tags: ['leads'],
+        summary: 'List a lead’s notes',
+        operationId: 'listNotes',
+        params: idParam,
+        response: { 200: { type: 'array', items: noteSchema }, 401: errorRef, 404: errorRef, 503: errorRef },
+      },
     },
     async (request, reply) => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -403,7 +449,14 @@ export const leadRoutes: FastifyPluginAsync<LeadRoutesOptions> = async (app, opt
     '/leads/:id/notes',
     {
       preHandler: [app.authenticate],
-      schema: { body: createNoteBody, response: { 201: noteSchema, 404: errorSchema, 503: errorSchema } },
+      schema: {
+        tags: ['leads'],
+        summary: 'Add a note to a lead',
+        operationId: 'createNote',
+        params: idParam,
+        body: createNoteBody,
+        response: { 201: noteSchema, 400: errorRef, 401: errorRef, 404: errorRef, 503: errorRef },
+      },
     },
     async (request, reply) => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -428,7 +481,13 @@ export const leadRoutes: FastifyPluginAsync<LeadRoutesOptions> = async (app, opt
     '/leads/:id/notes/:noteId',
     {
       preHandler: [app.authenticate],
-      schema: { response: { 204: {}, 404: errorSchema, 503: errorSchema } },
+      schema: {
+        tags: ['leads'],
+        summary: 'Delete a note',
+        operationId: 'deleteNote',
+        params: idNoteParam,
+        response: { 204: {}, 401: errorRef, 404: errorRef, 503: errorRef },
+      },
     },
     async (request, reply) => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -460,7 +519,11 @@ export const leadRoutes: FastifyPluginAsync<LeadRoutesOptions> = async (app, opt
     {
       preHandler: [app.authenticate],
       schema: {
-        response: { 200: { type: 'array', items: contactEventSchema }, 404: errorSchema, 503: errorSchema },
+        tags: ['leads'],
+        summary: 'List a lead’s contact events',
+        operationId: 'listContactEvents',
+        params: idParam,
+        response: { 200: { type: 'array', items: contactEventSchema }, 401: errorRef, 404: errorRef, 503: errorRef },
       },
     },
     async (request, reply) => {

@@ -15,8 +15,8 @@ CSS v4, themed end-to-end by `@sitecrm/design-system`.
 ```
 ┌─────────────────────────┐     /api/* (vite proxy)    ┌──────────────────┐
 │ @sitecrm/web (5173)     │ ─────────────────────────► │ @sitecrm/server  │
-│  pages/ components/     │                            │ (3001)           │
-│  api/client.ts ←────────┼── mirrors openapi.yaml ──► │ openapi/         │
+│  pages/ components/     │                            │ (3000)           │
+│  api/client.ts ←──── @sitecrm/types ───────────────► │ src/routes/      │
 └────────────┬────────────┘                            └──────────────────┘
              │ imports components + tokens
              ▼
@@ -26,10 +26,10 @@ CSS v4, themed end-to-end by `@sitecrm/design-system`.
 ```
 
 - **API access** goes through [`src/api/client.ts`](src/api/client.ts) — a
-  typed client whose functions map 1:1 to the operations in
-  [`apps/server/openapi/openapi.yaml`](../server/openapi/openapi.yaml).
-  In development Vite proxies `/api/*` to port 3001 (see `vite.config.ts`),
-  so app code only ever uses relative URLs.
+  typed client whose functions map 1:1 to the server's route operations
+  (whose schemas generate the OpenAPI spec at `/docs`). Shared request/response
+  types come from `@sitecrm/types`. In development Vite proxies `/api/*` to
+  port 3000 (see `vite.config.ts`), so app code only ever uses relative URLs.
 - **Styling** is Tailwind v4 with zero hard-coded colors:
   [`src/index.css`](src/index.css) imports the design system's token contract
   and maps it into Tailwind namespaces (`bg-surface`, `text-ink`,

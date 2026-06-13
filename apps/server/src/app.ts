@@ -7,10 +7,10 @@
  * and drive it with `inject()` — identical wiring, no sockets.
  *
  * Registered plugins (in order):
- * - `@fastify/cors`        — open in development; tighten `origin` in prod
+ * - `@fastify/cors`        — reflects origin in dev; ALLOWED_ORIGINS in prod
  * - `@fastify/jwt`         — JWT signing/verification; decorates `app.jwt`
- * - `@fastify/swagger`     — serves `openapi/openapi.yaml` statically at `/docs`
- * - `@fastify/swagger-ui`  — interactive Swagger UI at `/docs`
+ * - `@fastify/swagger`     — GENERATES the OpenAPI spec from route schemas
+ * - `@fastify/swagger-ui`  — interactive Swagger UI at `/docs` (+ /docs/json,/yaml)
  * - `authPlugin`           — decorates `app.authenticate` for protected routes
  *
  * Route groups (all prefixed `/api`):
@@ -24,17 +24,14 @@ import jwt from '@fastify/jwt';
 import swagger from '@fastify/swagger';
 import swaggerUi from '@fastify/swagger-ui';
 import Fastify, { type FastifyInstance } from 'fastify';
-import { dirname, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import authPlugin from './plugins/auth.js';
 import { healthRoutes } from './routes/health.js';
 import { authRoutes } from './routes/auth.js';
 import { leadRoutes } from './routes/leads.js';
 import { notificationRoutes } from './routes/notifications.js';
+import { errorSchema } from './routes/shared-schemas.js';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import type * as schema from './db/schema.js';
-
-const __dirname = dirname(fileURLToPath(import.meta.url));
 
 /**
  * Drizzle database instance type used throughout the server.
@@ -121,11 +118,53 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     secret: jwtSecret ?? 'dev-only-insecure-fallback-not-for-production',
   });
 
+  // OpenAPI spec is GENERATED from the route schemas (dynamic mode) — there is
+  // no hand-maintained YAML to drift. Each route's `schema` (tags, summary,
+  // operationId, security, request/response shapes) becomes one operation.
   await app.register(swagger, {
-    mode: 'static',
-    specification: {
-      path: resolve(__dirname, '../openapi/openapi.yaml'),
-      baseDir: resolve(__dirname, '../openapi'),
+    openapi: {
+      openapi: '3.1.0',
+      info: {
+        title: 'SiteCRM API',
+        version: '0.2.0',
+        description: [
+          'Primary REST API for SiteCRM. Handles authentication, lead management,',
+          'outreach, notifications, site generation, and deployments.',
+          '',
+          '**Authentication:** Most endpoints require a Bearer JWT. Obtain a token via',
+          '`POST /api/auth/login` or `POST /api/auth/register` and pass it as',
+          '`Authorization: Bearer <token>`.',
+          '',
+          '**Common error responses:** `400` (validation — unknown/invalid fields),',
+          '`401` (missing/invalid/expired token), `503` (database unavailable). All',
+          'errors use the shared `ErrorResponse` schema.',
+        ].join('\n'),
+        contact: { name: 'Riverfront Labs' },
+      },
+      servers: [
+        { url: 'http://api.localhost', description: 'Local development (Traefik)' },
+        { url: 'http://localhost:3000', description: 'Direct local development' },
+      ],
+      tags: [
+        { name: 'system', description: 'Health and operational endpoints' },
+        { name: 'auth', description: 'Registration, login, and current-user' },
+        { name: 'leads', description: 'Lead pipeline — CRUD, notes, contact events' },
+        { name: 'notifications', description: 'In-app notification inbox and real-time SSE stream' },
+      ],
+      components: {
+        securitySchemes: {
+          bearerAuth: { type: 'http', scheme: 'bearer', bearerFormat: 'JWT' },
+        },
+      },
+      // Protected by default; public routes (health, login, register) opt out
+      // with `security: []` in their own schema.
+      security: [{ bearerAuth: [] }],
+    },
+    // Name shared (addSchema) components by their `$id` instead of `def-N`,
+    // so the generated spec reads `#/components/schemas/ErrorResponse`.
+    refResolver: {
+      buildLocalReference: (json, _baseUri, fragment, i) =>
+        (typeof json.$id === 'string' && json.$id) || `${fragment}-${i}`,
     },
   });
 
@@ -133,6 +172,10 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     routePrefix: '/docs',
     uiConfig: { docExpansion: 'list', deepLinking: true },
   });
+
+  // Shared error envelope — registered once so it appears as a single reusable
+  // component and every route can `$ref` it (see routes/shared-schemas.ts).
+  app.addSchema(errorSchema);
 
   // Decorates app.authenticate — used as preHandler on protected routes.
   await app.register(authPlugin);

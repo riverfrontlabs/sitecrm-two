@@ -49,14 +49,13 @@ COPY packages/site-templates/package.json packages/site-templates/
 RUN npm ci --workspace @sitecrm/server --omit=dev
 
 COPY --from=build /repo/apps/server/dist apps/server/dist
-# The spec is read at runtime and served at /docs; it lives next to dist/
-# at the same relative depth as in the source tree (see plugins/openapi.ts).
-COPY apps/server/openapi apps/server/openapi
+# No spec file to copy — the OpenAPI document is generated from the route
+# schemas at boot and served at /docs (dynamic @fastify/swagger).
 
 # Inside a container the server must bind to all interfaces, not loopback.
 ENV HOST=0.0.0.0
-ENV PORT=3001
-EXPOSE 3001
+ENV PORT=3000
+EXPOSE 3000
 
 USER node
 CMD ["node", "apps/server/dist/server.js"]
