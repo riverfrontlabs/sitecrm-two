@@ -14,8 +14,10 @@
  * - `authPlugin`           — decorates `app.authenticate` for protected routes
  *
  * Route groups (all prefixed `/api`):
- * - `/api/health`  — liveness probe (no auth)
- * - `/api/auth`    — register, login, current-user
+ * - `/api/health`         — liveness probe (no auth)
+ * - `/api/auth`           — register, login, current-user
+ * - `/api/leads`          — lead CRUD, notes, contact events
+ * - `/api/notifications`  — notification inbox + SSE stream
  */
 import cors from '@fastify/cors';
 import jwt from '@fastify/jwt';
@@ -27,6 +29,8 @@ import { fileURLToPath } from 'node:url';
 import authPlugin from './plugins/auth.js';
 import { healthRoutes } from './routes/health.js';
 import { authRoutes } from './routes/auth.js';
+import { leadRoutes } from './routes/leads.js';
+import { notificationRoutes } from './routes/notifications.js';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import type * as schema from './db/schema.js';
 
@@ -124,6 +128,8 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
 
   await app.register(healthRoutes, { prefix: '/api' });
   await app.register(authRoutes, { prefix: '/api', db });
+  await app.register(leadRoutes, { prefix: '/api', db });
+  await app.register(notificationRoutes, { prefix: '/api', db });
 
   return app;
 }

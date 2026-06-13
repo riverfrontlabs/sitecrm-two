@@ -1,48 +1,66 @@
 /**
- * Typed client for the sitetwo-oh REST API.
+ * Typed REST client for the SiteCRM API.
  *
- * The wire format is defined by `apps/server/openapi/openapi.yaml` — the
- * types and functions here mirror that spec (operationIds match 1:1).
- * In development, Vite proxies `/api/*` to the Fastify server, so all URLs
- * are same-origin relative paths.
+ * Wire shapes are defined by `apps/server/openapi/openapi.yaml` — the
+ * functions here mirror that spec (operationIds map 1:1). In development,
+ * Vite proxies `/api/*` to the Fastify server so all URLs are same-origin
+ * relative paths.
+ *
+ * Auth: the module stores a JWT in both module scope and `localStorage`.
+ * Call `setAuthToken(token)` after login; the `request()` helper
+ * automatically injects `Authorization: Bearer <token>` on every call.
+ * A 401 response clears the stored token so the UI can redirect to login.
  */
+import type {
+  AuthResponse,
+  ContactEvent,
+  Lead,
+  LeadStatus,
+  NewLead,
+  Note,
+  Notification,
+  PaginatedResponse,
+  User,
+} from '@sitecrm/types';
 
-/** Client-supplied fields for creating a project. Mirrors `NewProject` in the spec. */
-export interface NewProject {
-  /** Short display name. 1–120 characters. */
-  title: string;
-  /** What the project is and why it exists. 1–2000 characters. */
-  description: string;
-  /** Optional link to the live project or repository. */
-  url?: string;
-  /** Optional free-form labels (e.g. tech stack). At most 10. */
-  tags?: string[];
+// ── Auth token management ─────────────────────────────────────────────────────
+
+const TOKEN_KEY = 'crm_token';
+
+// Module-scope copy avoids a localStorage read on every request.
+let _token: string | null = null;
+
+/** Persist a new JWT (or clear it on logout). Called by {@link AuthContext}. */
+export function setAuthToken(token: string | null) {
+  _token = token;
+  if (token) localStorage.setItem(TOKEN_KEY, token);
+  else localStorage.removeItem(TOKEN_KEY);
 }
 
-/** A stored project. Mirrors `Project` in the spec. */
-export interface Project extends NewProject {
-  /** Server-assigned UUID. */
-  id: string;
-  /** Creation timestamp, ISO 8601 in UTC. */
-  createdAt: string;
+/**
+ * Read the stored token — checks module scope first, then localStorage.
+ * Used during `AuthContext` initialisation to rehydrate from a previous session.
+ */
+export function getAuthToken(): string | null {
+  if (!_token) _token = localStorage.getItem(TOKEN_KEY);
+  return _token;
 }
 
-/** Standard error envelope returned by the API. Mirrors `Error` in the spec. */
-export interface ApiErrorBody {
+// ── Error types ───────────────────────────────────────────────────────────────
+
+interface ApiErrorBody {
   statusCode: number;
   error: string;
   message: string;
 }
 
 /**
- * Thrown by every client function when the API answers with a non-2xx
- * status. Carries the HTTP status and the server's `message` so UI code can
- * show meaningful feedback.
+ * Thrown by every client function when the API returns a non-2xx status.
+ * Carries the HTTP status code and the server's `message` so UI code can
+ * surface meaningful feedback without parsing the raw body.
  */
 export class ApiError extends Error {
-  /** HTTP status code of the failed response. */
   readonly status: number;
-
   constructor(status: number, message: string) {
     super(message);
     this.name = 'ApiError';
@@ -50,19 +68,22 @@ export class ApiError extends Error {
   }
 }
 
-/**
- * Performs a JSON request against the API and unwraps the response.
- *
- * @param path - Relative API path, e.g. `/api/projects`.
- * @param init - Standard `fetch` options (method, body, …).
- * @returns The parsed JSON body, or `undefined` for `204 No Content`.
- * @throws {ApiError} When the response status is not 2xx.
- */
+// ── Core request helper ───────────────────────────────────────────────────────
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const token = getAuthToken();
+  const headers: Record<string, string> = { 'content-type': 'application/json' };
+  if (token) headers['authorization'] = `Bearer ${token}`;
+
   const response = await fetch(path, {
-    headers: { 'content-type': 'application/json' },
     ...init,
+    headers: { ...headers, ...(init?.headers as Record<string, string> | undefined) },
   });
+
+  if (response.status === 401) {
+    setAuthToken(null);
+    throw new ApiError(401, 'Session expired. Please sign in again.');
+  }
 
   if (!response.ok) {
     const fallback = `Request failed with status ${response.status}`;
@@ -70,43 +91,108 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     throw new ApiError(response.status, body?.message ?? fallback);
   }
 
-  if (response.status === 204) {
-    return undefined as T;
-  }
-  return (await response.json()) as T;
+  if (response.status === 204) return undefined as T;
+  return response.json() as Promise<T>;
 }
 
-/**
- * The API surface, one function per OpenAPI operation.
- *
- * @example
- * const projects = await api.listProjects();
- * const created = await api.createProject({ title: 'New', description: '…' });
- * await api.deleteProject(created.id);
- */
-export const api = {
-  /** `GET /api/health` — operationId `getHealth`. */
-  getHealth(): Promise<{ status: 'ok'; uptimeSeconds: number }> {
-    return request('/api/health');
-  },
+// ── Query string helper ───────────────────────────────────────────────────────
 
-  /** `GET /api/projects` — operationId `listProjects`. Newest first. */
-  listProjects(): Promise<Project[]> {
-    return request('/api/projects');
-  },
+function qs(params?: Record<string, unknown>): string {
+  if (!params) return '';
+  const p = new URLSearchParams();
+  for (const [k, v] of Object.entries(params)) {
+    if (v === undefined || v === null) continue;
+    if (Array.isArray(v)) v.forEach(item => p.append(k, String(item)));
+    else p.set(k, String(v));
+  }
+  const str = p.toString();
+  return str ? `?${str}` : '';
+}
 
-  /** `POST /api/projects` — operationId `createProject`. */
-  createProject(input: NewProject): Promise<Project> {
-    return request('/api/projects', { method: 'POST', body: JSON.stringify(input) });
-  },
+// ── API surface ───────────────────────────────────────────────────────────────
 
-  /** `GET /api/projects/{projectId}` — operationId `getProject`. */
-  getProject(projectId: string): Promise<Project> {
-    return request(`/api/projects/${encodeURIComponent(projectId)}`);
-  },
+/** Notification list response — extends PaginatedResponse with unread badge count. */
+export interface PaginatedNotifications extends PaginatedResponse<Notification> {
+  unreadCount: number;
+}
 
-  /** `DELETE /api/projects/{projectId}` — operationId `deleteProject`. */
-  deleteProject(projectId: string): Promise<void> {
-    return request(`/api/projects/${encodeURIComponent(projectId)}`, { method: 'DELETE' });
+/** Params for `leadsApi.list`. */
+export interface ListLeadsParams {
+  page?: number;
+  pageSize?: number;
+  status?: LeadStatus | LeadStatus[];
+  shortlisted?: boolean;
+  search?: string;
+}
+
+/** `POST /api/auth/register` and `POST /api/auth/login`. */
+export const authApi = {
+  /** operationId: loginUser */
+  login(email: string, password: string): Promise<AuthResponse> {
+    return request('/api/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) });
+  },
+  /** operationId: registerUser */
+  register(email: string, password: string, firstName: string, lastName: string): Promise<AuthResponse> {
+    return request('/api/auth/register', { method: 'POST', body: JSON.stringify({ email, password, firstName, lastName }) });
+  },
+  /** operationId: getCurrentUser */
+  me(): Promise<User> {
+    return request('/api/auth/me');
+  },
+};
+
+/** Lead CRUD, notes, and contact events. */
+export const leadsApi = {
+  /** operationId: listLeads */
+  list(params?: ListLeadsParams): Promise<PaginatedResponse<Lead>> {
+    return request(`/api/leads${qs(params as Record<string, unknown>)}`);
+  },
+  /** operationId: getLead */
+  get(id: string): Promise<Lead> {
+    return request(`/api/leads/${encodeURIComponent(id)}`);
+  },
+  /** operationId: createLead */
+  create(input: NewLead & { status?: LeadStatus; shortlisted?: boolean }): Promise<Lead> {
+    return request('/api/leads', { method: 'POST', body: JSON.stringify(input) });
+  },
+  /** operationId: updateLead */
+  update(id: string, input: Partial<Lead>): Promise<Lead> {
+    return request(`/api/leads/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify(input) });
+  },
+  /** operationId: deleteLead */
+  delete(id: string): Promise<void> {
+    return request(`/api/leads/${encodeURIComponent(id)}`, { method: 'DELETE' });
+  },
+  /** operationId: listNotes */
+  listNotes(leadId: string): Promise<Note[]> {
+    return request(`/api/leads/${encodeURIComponent(leadId)}/notes`);
+  },
+  /** operationId: createNote */
+  createNote(leadId: string, content: string): Promise<Note> {
+    return request(`/api/leads/${encodeURIComponent(leadId)}/notes`, { method: 'POST', body: JSON.stringify({ content }) });
+  },
+  /** operationId: deleteNote */
+  deleteNote(leadId: string, noteId: string): Promise<void> {
+    return request(`/api/leads/${encodeURIComponent(leadId)}/notes/${encodeURIComponent(noteId)}`, { method: 'DELETE' });
+  },
+  /** operationId: listContactEvents */
+  listEvents(leadId: string): Promise<ContactEvent[]> {
+    return request(`/api/leads/${encodeURIComponent(leadId)}/events`);
+  },
+};
+
+/** Notification inbox. */
+export const notificationsApi = {
+  /** operationId: listNotifications */
+  list(params?: { page?: number; pageSize?: number; unread?: boolean }): Promise<PaginatedNotifications> {
+    return request(`/api/notifications${qs(params as Record<string, unknown>)}`);
+  },
+  /** operationId: markNotificationRead */
+  markRead(id: string): Promise<Notification> {
+    return request(`/api/notifications/${encodeURIComponent(id)}/read`, { method: 'PATCH' });
+  },
+  /** operationId: markAllNotificationsRead */
+  markAllRead(): Promise<{ count: number }> {
+    return request('/api/notifications/read-all', { method: 'POST' });
   },
 };
